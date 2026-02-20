@@ -13,7 +13,7 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 
 ## Installation
 
-````bash
+```bash
 npx skills add https://github.com/Nathan13888/nice-skills --skill init-repo
 npx skills add https://github.com/Nathan13888/nice-skills --skill sus
 npx skills add https://github.com/Nathan13888/nice-skills --skill check
@@ -22,5 +22,4 @@ npx skills add https://github.com/Nathan13888/nice-skills --skill reflect
 npx skills add https://github.com/Nathan13888/nice-skills --skill combine-docs
 
 npx skills add https://github.com/Nathan13888/nice-skills --skill ...
-```d
-````
+```
