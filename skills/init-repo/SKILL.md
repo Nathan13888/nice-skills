@@ -158,9 +158,45 @@ Check if the project directory is already inside a git repository (`git rev-pars
 1. Ask the user if they want a `.gitignore` created or updated for the chosen runtime
 2. Ask the user if they want an initial commit with the scaffolded files
 
-### Step 9: CLAUDE.md
+### Step 9: Pre-commit Hooks
 
-Create a `CLAUDE.md` file tailored to the project. Use the template below, filling in project-specific details:
+Ask the user if they want pre-commit hooks to enforce formatting and linting before each commit. Options:
+
+| Option | Description |
+|--------|-------------|
+| **Yes** (Recommended) | Catches issues before they reach CI |
+| **No** | Skip pre-commit hooks |
+
+If yes, set up hooks based on the runtime:
+
+**TypeScript (Bun/Node.js):**
+- Install `husky` and `lint-staged`
+- Configure `lint-staged` in `package.json` to run the chosen formatter/linter on staged files
+- Initialize husky with a `pre-commit` hook that runs `lint-staged`
+
+**Python:**
+- Install `pre-commit` framework
+- Create `.pre-commit-config.yaml` with hooks for the chosen formatter/linter (e.g., ruff, black)
+- Run `pre-commit install`
+
+**Rust:**
+- Create a `.git/hooks/pre-commit` script that runs `cargo fmt --check && cargo clippy`
+- Or install `pre-commit` framework with Rust hooks
+
+**Go:**
+- Create a `.git/hooks/pre-commit` script that runs `gofmt` and `go vet` (or `golangci-lint`)
+- Or install `pre-commit` framework with Go hooks
+
+### Step 10: CLAUDE.md
+
+Ask the user if they want a `CLAUDE.md` file created for the project. Options:
+
+| Option | Description |
+|--------|-------------|
+| **Yes** (Recommended) | Gives Claude context about the project for agentic development |
+| **No** | Skip CLAUDE.md |
+
+If yes, create a `CLAUDE.md` file tailored to the project. Use the template below, filling in project-specific details:
 
 ```markdown
 # {Project Name}
@@ -231,7 +267,7 @@ Create a `CLAUDE.md` file tailored to the project. Use the template below, filli
 {Brief description of intended architecture based on the problem}
 ```
 
-### Step 10: Summary
+### Step 11: Summary
 
 Print a summary of everything that was created:
 
@@ -244,6 +280,7 @@ Formatter: {formatter}
 Linter: {linter}
 License: {license}
 CI/CD: {ci/cd}
+Pre-commit: {yes/no}
 
 Files created:
   {list of files}
