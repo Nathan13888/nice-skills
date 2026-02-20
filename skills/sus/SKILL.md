@@ -1,6 +1,7 @@
 ---
 name: sus
-description: Finds suspicious, architecturally problematic, or high-impact maintainability
+description:
+  Finds suspicious, architecturally problematic, or high-impact maintainability
   issues in a codebase. Deploys parallel analysis agents to explore code, then synthesizes
   findings into a prioritized report. Use when user says "find problems", "audit code",
   "what's sus", "code review the repo", "find tech debt", or asks about code quality.
@@ -41,6 +42,7 @@ Before analyzing code quality, confirm the project actually builds. This is a ha
 2. Run the compile/build command.
 
 3. **Hard gate**: If compilation fails, report the errors and STOP. Do not proceed to analysis.
+
    ```
    ## Compilation Failed
 
@@ -87,31 +89,37 @@ Launch the user-selected agents simultaneously using the `Task` tool.
 Each agent below has a `subagent_type`, focus area, and exploration strategy. Use this information to construct the prompt for each agent's `Task` call.
 
 **Architecture Scout** (`Plan`)
+
 - **Focus:** Structural integrity — module boundaries, responsibility placement, dependency direction.
 - **Look for:** Misplaced responsibilities (business logic in controllers, I/O in domain models), layer violations, circular dependencies, god modules (5+ distinct concerns), entrypoints that do too much.
 - **Strategy:** Start with directory tree and module structure. Read entry points, follow the import graph. Focus on boundaries between modules.
 
 **Complexity Hunter** (`Explore`)
+
 - **Focus:** Code disproportionately hard to understand, modify, or test.
 - **Look for:** Deep nesting (4+ levels), long functions (50+ lines of logic), complex conditionals (3+ boolean conditions, nested ternaries), boolean/string flag parameters, functions with 5+ parameters, implicit state machines as if/else chains.
 - **Strategy:** Search for long files first, scan for nesting and complex conditionals. Prioritize most-imported files.
 
 **Coupling Detector** (`Explore`)
+
 - **Focus:** Hidden dependencies and tight coupling that make changes expensive.
 - **Look for:** Shotgun surgery (changing one behavior touches 4+ files), feature envy, abstraction leaks, implicit contracts (ordering/naming/magic values without enforcement), shared mutable state, connascence of meaning.
 - **Strategy:** Examine imports across module boundaries. Find functions that take or return types from other modules. Search for shared constants used across many files.
 
 **Consistency Auditor** (`general-purpose`)
+
 - **Focus:** Inconsistency signaling unfinished migrations or unclear conventions.
 - **Look for:** Same problem solved 3+ ways, half-migrated patterns, convention drift, naming inconsistency that creates real confusion across module boundaries, mixed paradigms without clear boundaries.
 - **Strategy:** Sample files across directories. Compare how common operations (error handling, logging, data access, validation) are implemented in different parts of the codebase.
 
 **Risk Assessor** (`Plan`)
+
 - **Focus:** Code one mistake away from a production incident.
 - **Look for:** Missing error handling at system boundaries (network, file I/O, DB, external APIs), implicit contracts that break silently, unsafe casts/coercions (`as any`, `unsafe`, unchecked unwrap), cascading failure risk, data integrity gaps, race conditions.
 - **Strategy:** Focus on system boundaries. Read error handling paths. Search for `unwrap`, `as any`, bare `except:`, empty catch blocks.
 
 **Optional specialist agents** (available via `/sus add:` or `/sus agents:`):
+
 - **Security Sentinel** (`general-purpose`) — injection vectors, hardcoded secrets, auth bypasses, CSRF/XSS/SSRF
 - **Performance Oracle** (`Explore`) — N+1 queries, unbounded data loading, sync blocking in async, missing caching, O(n^2) on large data
 - **Concurrency Analyst** (`Plan`) — shared mutable state without sync, deadlocks, TOCTOU, unawaited promises
@@ -122,6 +130,7 @@ Each agent below has a `subagent_type`, focus area, and exploration strategy. Us
 Include these criteria in every agent prompt so agents filter correctly.
 
 **CRITICAL** (active danger to production):
+
 - Silent data corruption, lossy conversions on user data
 - Concurrency hazards on data affecting correctness
 - Security boundary violations, injection vectors, hardcoded secrets
@@ -129,6 +138,7 @@ Include these criteria in every agent prompt so agents filter correctly.
 - Untestable architecture (core logic requires external services to test)
 
 **MAJOR** (significant maintenance/bug risk):
+
 - God classes (5+ responsibilities), shotgun surgery (4+ files), pattern confusion (3+ approaches)
 - Complexity walls (CC 15+, nesting 4+), missing boundary error handling
 - Implicit contracts, abstraction leaks
@@ -205,6 +215,7 @@ Output the final report in this format:
 ---
 
 ### 1. [SEVERITY] Title
+
 - **Category:** {category}
 - **Location:** `{file_path:line_number}` (and related locations)
 - **Flagged by:** {agent name(s)}
@@ -215,6 +226,7 @@ Output the final report in this format:
 ---
 
 ### 2. [SEVERITY] Title
+
 ...
 
 ---
@@ -222,6 +234,7 @@ Output the final report in this format:
 ## What's Next?
 
 Pick an option or tell me what you'd like to do:
+
 1. **Deep-dive** into a specific finding (give me the number)
 2. **Start fixing** — I'll tackle findings in priority order
 3. **Export** this report to a markdown file

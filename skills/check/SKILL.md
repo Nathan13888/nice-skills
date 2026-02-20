@@ -1,6 +1,7 @@
 ---
 name: check
-description: Verifies the agent's current work against a specific question by analyzing
+description:
+  Verifies the agent's current work against a specific question by analyzing
   unstaged changes, staged changes, recent commits, and codebase context. Answers
   succinctly for a senior audience. Use when user says "/check", "verify that",
   "confirm that", "check if", "is X done?", or asks about current session changes.
@@ -68,13 +69,13 @@ git log --oneline -10
 
 #### Conditionally run (based on the question):
 
-| Question type | Action |
-|---|---|
-| Names specific files or paths | Read those files |
-| Asks "how does X work" or "what does X do" | Grep for X, read relevant files |
-| Asks "do tests pass" or "are tests green" | Run the test suite via Bash (read-only — do NOT fix failures) |
-| Asks about a function, class, or symbol | Grep for its definition and usages |
-| Asks about recent changes to a specific area | `git log --oneline -20 -- {path}` and `git diff -- {path}` |
+| Question type                                | Action                                                        |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| Names specific files or paths                | Read those files                                              |
+| Asks "how does X work" or "what does X do"   | Grep for X, read relevant files                               |
+| Asks "do tests pass" or "are tests green"    | Run the test suite via Bash (read-only — do NOT fix failures) |
+| Asks about a function, class, or symbol      | Grep for its definition and usages                            |
+| Asks about recent changes to a specific area | `git log --oneline -20 -- {path}` and `git diff -- {path}`    |
 
 ### Step 3: Synthesize (conditional delegation)
 
@@ -114,12 +115,13 @@ Output in this exact format:
 {One sentence expanding the verdict — what makes it yes/no/partial, or the key takeaway.}
 
 **Evidence:**
+
 - `{file:line}` — {specific supporting detail}
 - `{file:line}` — {specific supporting detail}
 - {up to 4 bullets total}
 
-**Could elaborate on:** {1-2 follow-up angles the user might care about} *(optional — omit if the answer is complete)*
-**Suggestions:** {1-2 actionable items if gaps were found} *(optional — omit if verdict is a clean YES)*
+**Could elaborate on:** {1-2 follow-up angles the user might care about} _(optional — omit if the answer is complete)_
+**Suggestions:** {1-2 actionable items if gaps were found} _(optional — omit if verdict is a clean YES)_
 ```
 
 ### Format rules

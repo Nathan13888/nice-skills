@@ -138,12 +138,12 @@ Override the agent roster directly when invoking the skill:
 
 **Focus shortcuts:**
 
-| Focus | Agents deployed |
-|-------|----------------|
-| `security` | Security Sentinel, Risk Assessor, Coupling Detector, Architecture Scout, Consistency Auditor |
-| `performance` | Performance Oracle, Complexity Hunter, Coupling Detector, Architecture Scout, Risk Assessor |
-| `concurrency` | Concurrency Analyst, Risk Assessor, Coupling Detector, Complexity Hunter, Architecture Scout |
-| `api` | API Contract Reviewer, Consistency Auditor, Coupling Detector, Risk Assessor, Architecture Scout |
+| Focus         | Agents deployed                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `security`    | Security Sentinel, Risk Assessor, Coupling Detector, Architecture Scout, Consistency Auditor     |
+| `performance` | Performance Oracle, Complexity Hunter, Coupling Detector, Architecture Scout, Risk Assessor      |
+| `concurrency` | Concurrency Analyst, Risk Assessor, Coupling Detector, Complexity Hunter, Architecture Scout     |
+| `api`         | API Contract Reviewer, Consistency Auditor, Coupling Detector, Risk Assessor, Architecture Scout |
 
 ### Harness Override
 
