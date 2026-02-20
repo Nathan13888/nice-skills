@@ -33,6 +33,7 @@ Summarize back your understanding before proceeding.
 Suggest 2-3 kebab-case project names derived from the problem description. Ask the user to pick one or provide their own.
 
 Naming rules:
+
 - Lowercase, kebab-case (`my-project-name`)
 - Short (1-3 words)
 - Descriptive of the solution, not the problem
@@ -41,13 +42,13 @@ Naming rules:
 
 Ask the user which runtime/language to use. Present options based on what fits the problem:
 
-| Option | When to suggest |
-|--------|----------------|
-| **TypeScript (Bun)** | Web apps, APIs, CLI tools, full-stack; fast runtime with built-in bundler/test runner |
-| **TypeScript (Node.js)** | Web apps, APIs, CLI tools, full-stack; broader ecosystem compatibility |
-| **Python** | Data, ML/AI, scripting, automation |
-| **Rust** | Performance-critical, systems, CLI tools |
-| **Go** | Infrastructure, networking, microservices |
+| Option                   | When to suggest                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| **TypeScript (Bun)**     | Web apps, APIs, CLI tools, full-stack; fast runtime with built-in bundler/test runner |
+| **TypeScript (Node.js)** | Web apps, APIs, CLI tools, full-stack; broader ecosystem compatibility                |
+| **Python**               | Data, ML/AI, scripting, automation                                                    |
+| **Rust**                 | Performance-critical, systems, CLI tools                                              |
+| **Go**                   | Infrastructure, networking, microservices                                             |
 
 Suggest the best fit as the first option with "(Recommended)" appended.
 
@@ -56,23 +57,28 @@ Suggest the best fit as the first option with "(Recommended)" appended.
 Based on the chosen runtime, initialize the project:
 
 **TypeScript (Bun)** (Recommended for TypeScript):
+
 - Run `bun init`
 - Create `tsconfig.json` with strict mode
 
 **TypeScript (Node.js):**
+
 - Ask: npm, yarn, or pnpm? (Recommend pnpm)
 - Run the appropriate init command
 - Create `tsconfig.json` with strict mode
 
 **Python:**
+
 - Ask: uv, poetry, or pip? (Recommend uv)
 - Run the appropriate init command
 - Set Python version (ask or default to 3.12+)
 
 **Rust:**
+
 - Run `cargo init`
 
 **Go:**
+
 - Ask for module path (suggest `github.com/{user}/{project}`)
 - Run `go mod init`
 
@@ -82,35 +88,36 @@ Ask the user which formatter and linter to use. Present options based on the cho
 
 **TypeScript / JavaScript:**
 
-| Option | Type | Description |
-|--------|------|-------------|
-| **Biome** (Recommended) | Formatter + Linter | Fast, unified tool, minimal config |
-| **ESLint + Prettier** | Linter + Formatter | Most popular, huge plugin ecosystem |
-| **ESLint (flat config)** | Linter only | If user wants linting without a formatter |
-| **oxlint** | Linter | Extremely fast, Rust-based, drop-in ESLint alternative |
+| Option                   | Type               | Description                                            |
+| ------------------------ | ------------------ | ------------------------------------------------------ |
+| **Biome** (Recommended)  | Formatter + Linter | Fast, unified tool, minimal config                     |
+| **ESLint + Prettier**    | Linter + Formatter | Most popular, huge plugin ecosystem                    |
+| **ESLint (flat config)** | Linter only        | If user wants linting without a formatter              |
+| **oxlint**               | Linter             | Extremely fast, Rust-based, drop-in ESLint alternative |
 
 **Python:**
 
-| Option | Type | Description |
-|--------|------|-------------|
+| Option                 | Type               | Description                                     |
+| ---------------------- | ------------------ | ----------------------------------------------- |
 | **Ruff** (Recommended) | Formatter + Linter | Extremely fast, replaces Black + Flake8 + isort |
-| **Black + Flake8** | Formatter + Linter | Established, widely adopted |
-| **Black + Ruff** | Formatter + Linter | Black formatting with Ruff linting |
+| **Black + Flake8**     | Formatter + Linter | Established, widely adopted                     |
+| **Black + Ruff**       | Formatter + Linter | Black formatting with Ruff linting              |
 
 **Rust:**
 
-| Option | Type | Description |
-|--------|------|-------------|
+| Option                             | Type               | Description                               |
+| ---------------------------------- | ------------------ | ----------------------------------------- |
 | **rustfmt + Clippy** (Recommended) | Formatter + Linter | Standard Rust toolchain, no extra install |
 
 **Go:**
 
-| Option | Type | Description |
-|--------|------|-------------|
-| **gofmt + go vet** (Recommended) | Formatter + Linter | Built into Go toolchain |
-| **gofmt + golangci-lint** | Formatter + Linter | More comprehensive linting rules |
+| Option                           | Type               | Description                      |
+| -------------------------------- | ------------------ | -------------------------------- |
+| **gofmt + go vet** (Recommended) | Formatter + Linter | Built into Go toolchain          |
+| **gofmt + golangci-lint**        | Formatter + Linter | More comprehensive linting rules |
 
 After selection:
+
 1. Install the chosen tools as dev dependencies
 2. Create the appropriate config file(s) (e.g., `biome.json`, `ruff.toml`, `.eslintrc`, `rustfmt.toml`)
 3. Add `format`, `lint`, and `lint:fix` scripts to the project's task runner (e.g., `package.json` scripts, `Makefile`, `Justfile`)
@@ -119,13 +126,14 @@ After selection:
 
 Ask the user what CI/CD they want. Options:
 
-| Option | Description |
-|--------|-------------|
+| Option                           | Description               |
+| -------------------------------- | ------------------------- |
 | **GitHub Actions** (Recommended) | Standard for GitHub repos |
-| **None** | Skip CI/CD for now |
-| **Other** | Let user specify |
+| **None**                         | Skip CI/CD for now        |
+| **Other**                        | Let user specify          |
 
 If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
+
 - Format check step (e.g., `biome check`, `ruff format --check`, `cargo fmt --check`)
 - Lint step (using the linter chosen in Step 5)
 - Test step (appropriate test runner)
@@ -135,13 +143,13 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
 Ask the user which license to use:
 
-| Option | When to suggest |
-|--------|----------------|
-| **MIT** | Open source, permissive, most common |
-| **Apache 2.0** | Open source with patent protection |
-| **GPL 3.0** | Open source, copyleft, requires derivative works stay open |
-| **Proprietary** | Private/commercial projects |
-| **None** | Skip for now |
+| Option          | When to suggest                                            |
+| --------------- | ---------------------------------------------------------- |
+| **MIT**         | Open source, permissive, most common                       |
+| **Apache 2.0**  | Open source with patent protection                         |
+| **GPL 3.0**     | Open source, copyleft, requires derivative works stay open |
+| **Proprietary** | Private/commercial projects                                |
+| **None**        | Skip for now                                               |
 
 Create the `LICENSE` file with the current year and user's name (ask if not known from git config).
 
@@ -150,11 +158,13 @@ Create the `LICENSE` file with the current year and user's name (ask if not know
 Check if the project directory is already inside a git repository (`git rev-parse --is-inside-work-tree`).
 
 **If no repo exists:**
+
 1. Run `git init` and set default branch to `main`
 2. Create `.gitignore` appropriate for the chosen runtime (use GitHub's templates as reference)
 3. Create initial commit: `chore: initialize project`
 
 **If a repo already exists:**
+
 1. Ask the user if they want a `.gitignore` created or updated for the chosen runtime
 2. Ask the user if they want an initial commit with the scaffolded files
 
@@ -162,28 +172,32 @@ Check if the project directory is already inside a git repository (`git rev-pars
 
 Ask the user if they want pre-commit hooks to enforce formatting and linting before each commit. Options:
 
-| Option | Description |
-|--------|-------------|
+| Option                | Description                         |
+| --------------------- | ----------------------------------- |
 | **Yes** (Recommended) | Catches issues before they reach CI |
-| **No** | Skip pre-commit hooks |
+| **No**                | Skip pre-commit hooks               |
 
 If yes, set up hooks based on the runtime:
 
 **TypeScript (Bun/Node.js):**
+
 - Install `husky` and `lint-staged`
 - Configure `lint-staged` in `package.json` to run the chosen formatter/linter on staged files
 - Initialize husky with a `pre-commit` hook that runs `lint-staged`
 
 **Python:**
+
 - Install `pre-commit` framework
 - Create `.pre-commit-config.yaml` with hooks for the chosen formatter/linter (e.g., ruff, black)
 - Run `pre-commit install`
 
 **Rust:**
+
 - Create a `.git/hooks/pre-commit` script that runs `cargo fmt --check && cargo clippy`
 - Or install `pre-commit` framework with Rust hooks
 
 **Go:**
+
 - Create a `.git/hooks/pre-commit` script that runs `gofmt` and `go vet` (or `golangci-lint`)
 - Or install `pre-commit` framework with Go hooks
 
@@ -191,10 +205,10 @@ If yes, set up hooks based on the runtime:
 
 Ask the user if they want a `CLAUDE.md` file created for the project. Options:
 
-| Option | Description |
-|--------|-------------|
+| Option                | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
 | **Yes** (Recommended) | Gives Claude context about the project for agentic development |
-| **No** | Skip CLAUDE.md |
+| **No**                | Skip CLAUDE.md                                                 |
 
 If yes, create a `CLAUDE.md` file tailored to the project. Use the template below, filling in project-specific details:
 
@@ -212,10 +226,11 @@ If yes, create a `CLAUDE.md` file tailored to the project. Use the template belo
 - **Linter:** {linter}
 
 ## Project Structure
+```
 
-```
 {tree of created files/dirs}
-```
+
+````
 
 ## Development
 
@@ -223,7 +238,7 @@ If yes, create a `CLAUDE.md` file tailored to the project. Use the template belo
 
 ```bash
 {install command}
-```
+````
 
 ### Run
 
@@ -265,6 +280,7 @@ If yes, create a `CLAUDE.md` file tailored to the project. Use the template belo
 ## Architecture
 
 {Brief description of intended architecture based on the problem}
+
 ```
 
 ### Step 11: Summary
@@ -272,6 +288,7 @@ If yes, create a `CLAUDE.md` file tailored to the project. Use the template belo
 Print a summary of everything that was created:
 
 ```
+
 Project initialized: {name}
 Location: {path}
 Runtime: {runtime}
@@ -283,12 +300,14 @@ CI/CD: {ci/cd}
 Pre-commit: {yes/no}
 
 Files created:
-  {list of files}
+{list of files}
 
 Next steps:
-  1. cd {path}
-  2. {install command}
-  3. Start building!
+
+1. cd {path}
+2. {install command}
+3. Start building!
+
 ```
 
 ## Guidelines
@@ -301,3 +320,4 @@ Next steps:
 - The CLAUDE.md should be practical and specific, not boilerplate
 - Detect git user.name and user.email from git config for license attribution
 - If the user provides a GitHub username, use it for module paths and license
+```
