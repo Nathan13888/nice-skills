@@ -165,25 +165,28 @@ Ask the user which license to use. Present the common options prominently:
 <summary>Expanded license list (click to show)</summary>
 
 **Permissive:**
-`MIT` · `MIT-0` · `Apache-2.0` · `BSD-2-Clause` · `BSD-3-Clause` · `ISC` · `0BSD` · `Unlicense` · `CC0-1.0` · `UPL-1.0`
+`MIT` · `MIT-0` · `Apache-2.0` · `BSD-2-Clause` · `BSD-3-Clause` · `BSD-3-Clause-Clear` · `ISC` · `0BSD` · `Unlicense` · `Zlib` · `CC0-1.0` · `UPL-1.0`
 
 **Copyleft:**
-`GPL-2.0` · `GPL-3.0` · `LGPL-2.1` · `LGPL-3.0` · `AGPL-3.0` · `MPL-2.0` · `EPL-1.0` · `EPL-2.0` · `EUPL-1.2`
+`GPL-2.0` · `GPL-3.0` · `LGPL-2.1` · `LGPL-3.0` · `AGPL-3.0` · `MPL-2.0` · `EPL-1.0` · `EPL-2.0` · `EUPL-1.2` · `OSL-3.0`
+
+**Source-available:**
+`BSL-1.0`
 
 **Other:**
-`CC-BY-4.0` · `CC-BY-SA-4.0` · `OFL-1.1` · `MulanPSL-2.0`
+`CC-BY-4.0` · `CC-BY-SA-4.0` · `OFL-1.1` · `MulanPSL-2.0` · `WTFPL`
 
 </details>
 
 #### Fetching License Text
 
-Fetch the license text using `WebFetch` from Gitea's license templates:
+Fetch the license text using `WebFetch` from this skill's vendored license templates:
 
 ```
-https://raw.githubusercontent.com/go-gitea/gitea/main/options/license/{SPDX-ID}
+https://raw.githubusercontent.com/Nathan13888/nice-skills/master/data/licenses/{SPDX-ID}
 ```
 
-After fetching, replace placeholder fields with actual values:
+After reading, replace placeholder fields with actual values:
 
 - `<year>` or `[year]` → current year
 - `<copyright holders>` or `[fullname]` → user's name from `git config user.name` (ask if not set)
@@ -228,16 +231,16 @@ Check if the project directory is already inside a git repository (`git rev-pars
 1. Ask the user if they want a `.gitignore` created or updated for the chosen runtime
 2. Ask the user if they want an initial commit with the scaffolded files
 
-#### Fetching `.gitignore`
+#### Fetching `.gitignore` Templates
 
 Fetch the primary `.gitignore` template for the chosen runtime using `WebFetch`:
 
-| Runtime               | Template | URL                                                                        |
-| --------------------- | -------- | -------------------------------------------------------------------------- |
-| TypeScript (Bun/Node) | `Node`   | `https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore`   |
-| Python                | `Python` | `https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore` |
-| Rust                  | `Rust`   | `https://raw.githubusercontent.com/github/gitignore/main/Rust.gitignore`   |
-| Go                    | `Go`     | `https://raw.githubusercontent.com/github/gitignore/main/Go.gitignore`     |
+| Runtime               | Template | URL                                                                                                  |
+| --------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| TypeScript (Bun/Node) | `Node`   | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Node.gitignore`   |
+| Python                | `Python` | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Python.gitignore` |
+| Rust                  | `Rust`   | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Rust.gitignore`   |
+| Go                    | `Go`     | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Go.gitignore`     |
 
 After fetching the primary template, ask the user if they want additional global ignores appended:
 
@@ -251,7 +254,7 @@ After fetching the primary template, ask the user if they want additional global
 | Vim       | `Vim`              |
 | None      | _(skip)_           |
 
-Global template URL pattern: `https://raw.githubusercontent.com/github/gitignore/main/Global/{Name}.gitignore`
+Global URL pattern: `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Global/{Name}.gitignore`
 
 Combine templates into a single `.gitignore` with section headers:
 
