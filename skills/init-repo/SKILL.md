@@ -8,6 +8,7 @@ allowed-tools:
   - Read
   - Glob
   - AskUserQuestion
+  - WebFetch
 ---
 
 # Initializing Project
@@ -76,6 +77,13 @@ Based on the chosen runtime, initialize the project:
 **Rust:**
 
 - Run `cargo init`
+- Create `rust-toolchain.toml` to pin the toolchain and ensure all contributors have formatting/linting/editor components:
+
+```toml
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy", "rust-analyzer"]
+```
 
 **Go:**
 
@@ -141,17 +149,69 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
 ### Step 7: Licensing
 
-Ask the user which license to use:
+Ask the user which license to use. Present the common options prominently:
 
-| Option          | When to suggest                                            |
-| --------------- | ---------------------------------------------------------- |
-| **MIT**         | Open source, permissive, most common                       |
-| **Apache 2.0**  | Open source with patent protection                         |
-| **GPL 3.0**     | Open source, copyleft, requires derivative works stay open |
-| **Proprietary** | Private/commercial projects                                |
-| **None**        | Skip for now                                               |
+| Option           | SPDX ID       | Category   | When to suggest                                      |
+| ---------------- | ------------- | ---------- | ---------------------------------------------------- |
+| **MIT**          | `MIT`         | Permissive | Most common open-source license                      |
+| **Apache 2.0**   | `Apache-2.0`  | Permissive | Open source with patent protection                   |
+| **GPL 3.0**      | `GPL-3.0`     | Copyleft   | Requires derivative works stay open                  |
+| **Dual License** | _(see below)_ | Permissive | Two licenses (e.g., MIT + Apache-2.0, Rust standard) |
+| **Proprietary**  | —             | —          | Private/commercial projects                          |
+| **None**         | —             | —          | Skip for now                                         |
+| **Other**        | _(see below)_ | —          | Pick from expanded list                              |
 
-Create the `LICENSE` file with the current year and user's name (ask if not known from git config).
+<details>
+<summary>Expanded license list (click to show)</summary>
+
+**Permissive:**
+`MIT` · `MIT-0` · `Apache-2.0` · `BSD-2-Clause` · `BSD-3-Clause` · `ISC` · `0BSD` · `Unlicense` · `CC0-1.0` · `UPL-1.0`
+
+**Copyleft:**
+`GPL-2.0` · `GPL-3.0` · `LGPL-2.1` · `LGPL-3.0` · `AGPL-3.0` · `MPL-2.0` · `EPL-1.0` · `EPL-2.0` · `EUPL-1.2`
+
+**Other:**
+`CC-BY-4.0` · `CC-BY-SA-4.0` · `OFL-1.1` · `MulanPSL-2.0`
+
+</details>
+
+#### Fetching License Text
+
+Fetch the license text using `WebFetch` from Gitea's license templates:
+
+```
+https://raw.githubusercontent.com/go-gitea/gitea/main/options/license/{SPDX-ID}
+```
+
+After fetching, replace placeholder fields with actual values:
+
+- `<year>` or `[year]` → current year
+- `<copyright holders>` or `[fullname]` → user's name from `git config user.name` (ask if not set)
+
+#### Single License
+
+1. Fetch the license text from the URL above
+2. Replace placeholders
+3. Write to `LICENSE`
+
+#### Dual License
+
+When the user selects **Dual License**:
+
+1. Ask which two licenses to combine (recommend **MIT + Apache-2.0**, the Rust ecosystem standard)
+2. Fetch both license texts in parallel via `WebFetch`
+3. Replace placeholders in both
+4. Create `LICENSE-MIT` and `LICENSE-APACHE` (pattern: `LICENSE-{SHORT-NAME}`)
+5. Create a root `LICENSE` file explaining the dual licensing:
+
+```
+This project is licensed under either of
+
+  * Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
+  * MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
+
+at your option.
+```
 
 ### Step 8: Git Setup
 
@@ -160,13 +220,48 @@ Check if the project directory is already inside a git repository (`git rev-pars
 **If no repo exists:**
 
 1. Run `git init` and set default branch to `main`
-2. Create `.gitignore` appropriate for the chosen runtime (use GitHub's templates as reference)
+2. Create `.gitignore` (see below)
 3. Create initial commit: `chore: initialize project`
 
 **If a repo already exists:**
 
 1. Ask the user if they want a `.gitignore` created or updated for the chosen runtime
 2. Ask the user if they want an initial commit with the scaffolded files
+
+#### Fetching `.gitignore`
+
+Fetch the primary `.gitignore` template for the chosen runtime using `WebFetch`:
+
+| Runtime               | Template | URL                                                                        |
+| --------------------- | -------- | -------------------------------------------------------------------------- |
+| TypeScript (Bun/Node) | `Node`   | `https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore`   |
+| Python                | `Python` | `https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore` |
+| Rust                  | `Rust`   | `https://raw.githubusercontent.com/github/gitignore/main/Rust.gitignore`   |
+| Go                    | `Go`     | `https://raw.githubusercontent.com/github/gitignore/main/Go.gitignore`     |
+
+After fetching the primary template, ask the user if they want additional global ignores appended:
+
+| Option    | Template Name      |
+| --------- | ------------------ |
+| macOS     | `macOS`            |
+| Linux     | `Linux`            |
+| Windows   | `Windows`          |
+| VSCode    | `VisualStudioCode` |
+| JetBrains | `JetBrains`        |
+| Vim       | `Vim`              |
+| None      | _(skip)_           |
+
+Global template URL pattern: `https://raw.githubusercontent.com/github/gitignore/main/Global/{Name}.gitignore`
+
+Combine templates into a single `.gitignore` with section headers:
+
+```gitignore
+# === Node ===
+{fetched Node.gitignore content}
+
+# === macOS ===
+{fetched macOS.gitignore content}
+```
 
 ### Step 9: Pre-commit Hooks
 
@@ -295,7 +390,7 @@ Runtime: {runtime}
 Package Manager: {pkg manager}
 Formatter: {formatter}
 Linter: {linter}
-License: {license}
+License: {license(s)}
 CI/CD: {ci/cd}
 Pre-commit: {yes/no}
 
@@ -320,4 +415,7 @@ Next steps:
 - The CLAUDE.md should be practical and specific, not boilerplate
 - Detect git user.name and user.email from git config for license attribution
 - If the user provides a GitHub username, use it for module paths and license
+- Use `WebFetch` with prompt "Return the full file content exactly as-is" to get raw template text without summarization
+- If `WebFetch` fails for any URL, fall back to generating content from memory and inform the user
+- For dual-license, fetch both license texts in parallel to minimize latency
 ```
