@@ -235,12 +235,12 @@ Check if the project directory is already inside a git repository (`git rev-pars
 
 Fetch the primary `.gitignore` template for the chosen runtime using `WebFetch`:
 
-| Runtime               | Template | URL                                                                                                  |
-| --------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| TypeScript (Bun/Node) | `Node`   | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Node.gitignore`   |
-| Python                | `Python` | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Python.gitignore` |
-| Rust                  | `Rust`   | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Rust.gitignore`   |
-| Go                    | `Go`     | `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Go.gitignore`     |
+| Runtime               | Template | URL                                                                                                            |
+| --------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| TypeScript (Bun/Node) | `Node`   | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Node.gitignore`   |
+| Python                | `Python` | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Python.gitignore` |
+| Rust                  | `Rust`   | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Rust.gitignore`   |
+| Go                    | `Go`     | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Go.gitignore`     |
 
 After fetching the primary template, ask the user if they want additional global ignores appended:
 
@@ -254,7 +254,7 @@ After fetching the primary template, ask the user if they want additional global
 | Vim       | `Vim`              |
 | None      | _(skip)_           |
 
-Global URL pattern: `https://raw.githubusercontent.com/Nathan13888/nice-skills/master/vendor/gitignore/Global/{Name}.gitignore`
+Global URL pattern: `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Global/{Name}.gitignore`
 
 Combine templates into a single `.gitignore` with section headers:
 

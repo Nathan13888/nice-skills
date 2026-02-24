@@ -1,3 +1,0 @@
-[submodule "vendor/gitignore"]
-	path = vendor/gitignore
-	url = https://github.com/github/gitignore.git
