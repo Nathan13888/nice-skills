@@ -9,6 +9,7 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 - `/check`: Confirm something specific you expected is correct and done to your satisfaction.
 - `/explore`: Strategic discovery of a project's capabilities — catalogs existing features and identifies improvements and expansion opportunities.
 - `/reflect`: Ask the agent to think about what it has done and if it's done a good job itself.
+- `/wtf`: Quick situational awareness for the current git branch -- what is this branch about, or what's been happening on trunk.
 - `/combine-docs`: Consolidate non-code based documentation in the repository so all existing
 
 ## Installation
@@ -19,6 +20,7 @@ npx skills add https://github.com/Nathan13888/nice-skills --skill sus
 npx skills add https://github.com/Nathan13888/nice-skills --skill check
 npx skills add https://github.com/Nathan13888/nice-skills --skill explore
 npx skills add https://github.com/Nathan13888/nice-skills --skill reflect
+npx skills add https://github.com/Nathan13888/nice-skills --skill wtf
 npx skills add https://github.com/Nathan13888/nice-skills --skill combine-docs
 
 npx skills add https://github.com/Nathan13888/nice-skills --skill ...
