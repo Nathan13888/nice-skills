@@ -306,15 +306,24 @@ Combine templates into a single `.gitignore` with section headers:
 {fetched macOS.gitignore content}
 ```
 
-### Step 9: Pre-commit Hooks
+### Step 9: Git Hooks
 
-Ask the user if they want pre-commit hooks to enforce formatting and linting before each commit. Options:
+Ask the user if they want git hooks to enforce code quality. Options:
 
-| Option                             | Description                                                         |
-| ---------------------------------- | ------------------------------------------------------------------- |
+| Option                               | Description                                                       |
+| ------------------------------------ | ----------------------------------------------------------------- |
 | **Yes, with Lefthook** (Recommended) | Universal git hooks manager; works with any language/runtime      |
-| **Yes, with native hooks**         | Language-specific setup (husky, pre-commit framework, .git/hooks)   |
-| **No**                             | Skip pre-commit hooks                                               |
+| **Yes, with native hooks**           | Language-specific setup (husky, pre-commit framework, .git/hooks) |
+| **No**                               | Skip git hooks                                                    |
+
+The hooks follow this convention:
+
+| Hook           | Action                                                    |
+| -------------- | --------------------------------------------------------- |
+| `pre-commit`   | **Auto-fix** formatting and linting on staged files       |
+| `pre-push`     | **Check** formatting and linting (no fix) + run tests     |
+
+The rationale: `pre-commit` fixes what it can so the developer isn't blocked; `pre-push` is a final gate that catches anything unfixable and runs the full test suite before code reaches the remote.
 
 #### Lefthook (universal, any runtime)
 
@@ -325,15 +334,24 @@ Lefthook is a fast, language-agnostic git hooks manager that works for any runti
    - Homebrew: `brew install lefthook`
    - Go: `go install github.com/evilmartians/lefthook@latest`
    - Or download a binary release from GitHub
-2. Create `lefthook.yml` at the project root with hooks for the chosen formatter/linter:
+2. Create `lefthook.yml` at the project root. Substitute the actual commands for the chosen runtime and formatter/linter:
 
 ```yaml
 pre-commit:
   commands:
-    format:
-      run: {format check command}
-    lint:
-      run: {lint command}
+    format-fix:
+      run: {format fix command}   # e.g. biome format --write, ruff format, cargo fmt
+    lint-fix:
+      run: {lint fix command}     # e.g. biome lint --fix, ruff check --fix, cargo clippy --fix
+
+pre-push:
+  commands:
+    format-check:
+      run: {format check command} # e.g. biome format --check, ruff format --check, cargo fmt --check
+    lint-check:
+      run: {lint check command}   # e.g. biome lint, ruff check, cargo clippy -- -D warnings
+    test:
+      run: {test command}         # e.g. bun test, pytest, cargo test, go test ./...
 ```
 
 3. Run `lefthook install` to activate the hooks.
@@ -345,24 +363,29 @@ If the user prefers native hooks instead:
 **TypeScript (Bun/Node.js):**
 
 - Install `husky` and `lint-staged`
-- Configure `lint-staged` in `package.json` to run the chosen formatter/linter on staged files
-- Initialize husky with a `pre-commit` hook that runs `lint-staged`
+- Configure `lint-staged` in `package.json` to run the formatter/linter fix commands on staged files (auto-fix on commit)
+- Initialize husky with:
+  - `pre-commit` hook: runs `lint-staged` (auto-fixes staged files)
+  - `pre-push` hook: runs format check, lint check, and tests
 
 **Python:**
 
 - Install `pre-commit` framework
-- Create `.pre-commit-config.yaml` with hooks for the chosen formatter/linter (e.g., ruff, black)
-- Run `pre-commit install`
+- Create `.pre-commit-config.yaml` with hooks that **fix** (e.g., `ruff format`, `ruff check --fix`)
+- Run `pre-commit install --hook-type pre-commit --hook-type pre-push`
+- Add a `pre-push` stage entry (or a separate `.git/hooks/pre-push` script) that runs format check, lint check, and `pytest`
 
 **Rust:**
 
-- Create a `.git/hooks/pre-commit` script that runs `cargo fmt --check && cargo clippy`
-- Or install `pre-commit` framework with Rust hooks
+- Create `.git/hooks/pre-commit`: runs `cargo fmt` (fix) and `cargo clippy --fix`
+- Create `.git/hooks/pre-push`: runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`
+- Make both scripts executable (`chmod +x`)
 
 **Go:**
 
-- Create a `.git/hooks/pre-commit` script that runs `gofmt` and `go vet` (or `golangci-lint`)
-- Or install `pre-commit` framework with Go hooks
+- Create `.git/hooks/pre-commit`: runs `gofmt -w .` (fix) and applies `golangci-lint run --fix` if available
+- Create `.git/hooks/pre-push`: runs `gofmt -l .` (check), `go vet ./...`, and `go test ./...`
+- Make both scripts executable (`chmod +x`)
 
 ### Step 10: CLAUDE.md
 
