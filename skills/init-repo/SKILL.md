@@ -390,14 +390,21 @@ If the user prefers native hooks instead:
 
 ### Step 10: CLAUDE.md
 
-Ask the user if they want a `CLAUDE.md` file created for the project. Options:
+Ask the user if they want an agent context file created for the project. Options:
 
-| Option                | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| **Yes** (Recommended) | Gives Claude context about the project for agentic development |
-| **No**                | Skip CLAUDE.md                                                 |
+| Option                             | Description                                                                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Yes, as `CLAUDE.md`** (Recommended) | Gives Claude context about the project for agentic development                                                       |
+| **Yes, as `AGENTS.md` + symlink**  | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
+| **No**                             | Skip                                                                                                                    |
 
-If yes, create a `CLAUDE.md` file tailored to the project. Use the template below, filling in project-specific details:
+If the user picks **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and then run:
+
+```bash
+ln -s AGENTS.md CLAUDE.md
+```
+
+Regardless of which option is chosen, the file content is identical -- use the template below, filling in project-specific details:
 
 ```markdown
 # {Project Name}
@@ -489,7 +496,7 @@ CI/CD: {ci/cd}
 Pre-commit: {yes/no}
 
 Files created:
-{list of files}
+{list of files -- if AGENTS.md + symlink was chosen, show both AGENTS.md and CLAUDE.md -> AGENTS.md}
 
 Next steps:
 
@@ -511,7 +518,7 @@ CI/CD: {ci/cd}
 Pre-commit: {yes/no}
 
 Files created:
-{list of files}
+{list of files -- if AGENTS.md + symlink was chosen, show both AGENTS.md and CLAUDE.md -> AGENTS.md}
 
 Next steps:
 
