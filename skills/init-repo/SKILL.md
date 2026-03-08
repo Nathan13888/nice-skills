@@ -394,8 +394,8 @@ Ask the user if they want an agent context file created for the project. Options
 
 | Option                             | Description                                                                                                             |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Yes, as `CLAUDE.md`** (Recommended) | Gives Claude context about the project for agentic development                                                       |
-| **Yes, as `AGENTS.md` + symlink**  | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
+| **Yes, as `CLAUDE.md`** | Gives Claude context about the project for agentic development                                                       |
+| **Yes, as `AGENTS.md` + symlink ** (recommended)  | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
 | **No**                             | Skip                                                                                                                    |
 
 If the user picks **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and then run:
