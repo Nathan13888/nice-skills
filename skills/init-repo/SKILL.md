@@ -1,6 +1,6 @@
 ---
 name: init-repo
-description: Scaffolds a new project repository for agentic development from a problem description. Guides the user through naming, runtime, package manager, devops, licensing, and project structure, then initializes git and a CLAUDE.md file. Use when the user says "init project", "new project", "start a project", "scaffold repo", "create repo", or describes a problem they want to build a solution for.
+description: Scaffolds a new project repository for agentic development from a problem description, or sets up ops tooling (git, precommits, gitignore, licensing, CI) for an existing project. Guides the user through naming, runtime, package manager, devops, licensing, and project structure. Use when the user says "init project", "new project", "start a project", "scaffold repo", "create repo", or describes a problem they want to build a solution for.
 allowed-tools:
   - Bash
   - Write
@@ -13,13 +13,37 @@ allowed-tools:
 
 # Initializing Project
 
-Scaffold a new project repository optimized for agentic development from a problem description.
+Scaffold a new project repository optimized for agentic development from a problem description -- or just set up ops tooling (git, precommits, gitignore, licensing, etc.) for an existing or empty project.
 
 ## Quick Start
 
 When invoked, follow the workflow below sequentially. Use `AskUserQuestion` at each decision point to gather user preferences. Do NOT skip steps or assume defaults without asking.
 
 ## Workflow
+
+### Step 0: Detect Environment
+
+Before anything else, check the current directory's state:
+
+1. Run `git rev-parse --is-inside-work-tree` to see if the CWD is already inside a git repository (even if it has zero commits or is otherwise empty).
+2. Run `ls -A` to check if the directory has any files/folders at all.
+3. If it IS a git repo, note this -- we will NOT run `git init` later.
+4. If it is NOT a git repo, note this -- we may need to initialize one later.
+
+Tell the user what you detected:
+
+- Whether the current directory is a git repo
+- Whether it's empty or has existing files
+
+Then ask explicitly:
+
+> **Where do you want to set up the project?**
+>
+> 1. **Here** -- use the current directory (`{CWD}`)
+> 2. **New subdirectory** -- create a new folder inside the current directory
+
+If the user picks "New subdirectory", ask for the folder name, create it, and `cd` into it.
+All subsequent operations MUST happen in the chosen directory -- never in a parent or sibling directory.
 
 ### Step 1: Understand the Problem
 
@@ -28,6 +52,19 @@ Read the user's problem description. If none was provided, ask:
 > What problem are you solving? Describe what you want to build in 1-2 sentences.
 
 Summarize back your understanding before proceeding.
+
+### Step 1.5: Scaffolding Mode
+
+Ask the user what level of scaffolding they want:
+
+> **What would you like to set up?**
+>
+> 1. **Full project** -- scaffold code, tooling, and ops (runtime, package manager, formatter, linter, CI, license, precommits, CLAUDE.md)
+> 2. **Ops only** -- just set up ops tooling (git, .gitignore, license, CI, precommits, CLAUDE.md) without creating project code or installing a runtime/package manager
+
+If the user picks **Ops only**, skip Steps 2-5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, and CLAUDE.md.
+
+If the user picks **Full project**, continue with Step 2.
 
 ### Step 2: Project Name
 
@@ -218,18 +255,19 @@ at your option.
 
 ### Step 8: Git Setup
 
-Check if the project directory is already inside a git repository (`git rev-parse --is-inside-work-tree`).
+Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
-**If no repo exists:**
+**If no repo was detected in Step 0:**
 
 1. Run `git init` and set default branch to `main`
 2. Create `.gitignore` (see below)
 3. Create initial commit: `chore: initialize project`
 
-**If a repo already exists:**
+**If a repo already exists (detected in Step 0):**
 
-1. Ask the user if they want a `.gitignore` created or updated for the chosen runtime
-2. Ask the user if they want an initial commit with the scaffolded files
+1. Ask the user if they want a `.gitignore` created or updated
+2. If in **Ops only** mode and no runtime was chosen, ask the user which `.gitignore` template(s) to use (or offer to skip)
+3. Ask the user if they want an initial commit with the scaffolded files
 
 #### Fetching `.gitignore` Templates
 
@@ -383,7 +421,9 @@ If yes, create a `CLAUDE.md` file tailored to the project. Use the template belo
 
 ### Step 11: Summary
 
-Print a summary of everything that was created:
+Print a summary of everything that was created. Adapt the summary to the chosen mode:
+
+**Full project mode:**
 
 ```
 
@@ -402,19 +442,41 @@ Files created:
 
 Next steps:
 
-1. cd {path}
-2. {install command}
-3. Start building!
+1. {install command}
+2. Start building!
 
 ```
 
+**Ops only mode:**
+
+```
+
+Ops tooling initialized
+Location: {path}
+License: {license(s)}
+CI/CD: {ci/cd}
+Pre-commit: {yes/no}
+
+Files created:
+{list of files}
+
+Next steps:
+
+1. Start building!
+
+```
+
+If the project was created in the current directory, do NOT include a `cd` step -- the user is already there.
+
 ## Guidelines
 
-- Always ask before creating files - never assume preferences
+- Always ask before creating files -- never assume preferences
 - Use `AskUserQuestion` with concrete options, not open-ended prompts
 - If a tool is not installed (e.g., `bun`, `uv`), offer to install it or suggest an alternative
+- **All files MUST be created in the chosen project directory (CWD or the user's subdirectory choice from Step 0) -- never in a parent, sibling, or unrelated directory**
 - Check if the target directory already exists before creating anything
-- Keep the initial project minimal - don't over-scaffold
+- Keep the initial project minimal -- don't over-scaffold
+- Respect the user's choice to skip code scaffolding -- ops-only mode is a first-class path, not a fallback
 - The CLAUDE.md should be practical and specific, not boilerplate
 - Detect git user.name and user.email from git config for license attribution
 - If the user provides a GitHub username, use it for module paths and license
