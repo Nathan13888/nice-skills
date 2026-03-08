@@ -184,6 +184,8 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 - Test step (appropriate test runner)
 - Triggered on push to `main` and pull requests
 
+> **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
+
 ### Step 7: Licensing
 
 Ask the user which license to use. Present the common options prominently:
@@ -308,12 +310,37 @@ Combine templates into a single `.gitignore` with section headers:
 
 Ask the user if they want pre-commit hooks to enforce formatting and linting before each commit. Options:
 
-| Option                | Description                         |
-| --------------------- | ----------------------------------- |
-| **Yes** (Recommended) | Catches issues before they reach CI |
-| **No**                | Skip pre-commit hooks               |
+| Option                             | Description                                                         |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| **Yes, with Lefthook** (Recommended) | Universal git hooks manager; works with any language/runtime      |
+| **Yes, with native hooks**         | Language-specific setup (husky, pre-commit framework, .git/hooks)   |
+| **No**                             | Skip pre-commit hooks                                               |
 
-If yes, set up hooks based on the runtime:
+#### Lefthook (universal, any runtime)
+
+Lefthook is a fast, language-agnostic git hooks manager that works for any runtime.
+
+1. Install lefthook (pick the method appropriate for the project):
+   - npm/bun: `npm install --save-dev lefthook` / `bun add -d lefthook`
+   - Homebrew: `brew install lefthook`
+   - Go: `go install github.com/evilmartians/lefthook@latest`
+   - Or download a binary release from GitHub
+2. Create `lefthook.yml` at the project root with hooks for the chosen formatter/linter:
+
+```yaml
+pre-commit:
+  commands:
+    format:
+      run: {format check command}
+    lint:
+      run: {lint command}
+```
+
+3. Run `lefthook install` to activate the hooks.
+
+#### Native hooks (language-specific)
+
+If the user prefers native hooks instead:
 
 **TypeScript (Bun/Node.js):**
 
@@ -443,7 +470,9 @@ Files created:
 Next steps:
 
 1. {install command}
-2. Start building!
+2. Push to GitHub and verify GitHub Actions workflows run correctly
+   - Configure any required secrets in Settings -> Secrets and variables -> Actions
+3. Start building!
 
 ```
 
@@ -462,9 +491,13 @@ Files created:
 
 Next steps:
 
-1. Start building!
+1. Push to GitHub and verify GitHub Actions workflows run correctly
+   - Configure any required secrets in Settings -> Secrets and variables -> Actions
+2. Start building!
 
 ```
+
+> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin main`.
 
 If the project was created in the current directory, do NOT include a `cd` step -- the user is already there.
 
