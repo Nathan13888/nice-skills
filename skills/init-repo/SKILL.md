@@ -27,8 +27,8 @@ Before anything else, check the current directory's state:
 
 1. Run `git rev-parse --is-inside-work-tree` to see if the CWD is already inside a git repository (even if it has zero commits or is otherwise empty).
 2. Run `ls -A` to check if the directory has any files/folders at all.
-3. If it IS a git repo, note this -- we will NOT run `git init` later.
-4. If it is NOT a git repo, note this -- we may need to initialize one later.
+3. If it IS a git repo, note this -- we will NOT run `git init` later. Also run `git symbolic-ref --short HEAD` to detect the current default branch name and store it as `{DEFAULT_BRANCH}`.
+4. If it is NOT a git repo, note this -- we may need to initialize one later. `{DEFAULT_BRANCH}` will be determined in Step 8.
 
 Tell the user what you detected:
 
@@ -182,7 +182,7 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 - Format check step (e.g., `biome check`, `ruff format --check`, `cargo fmt --check`)
 - Lint step (using the linter chosen in Step 5)
 - Test step (appropriate test runner)
-- Triggered on push to `main` and pull requests
+- Triggered on push to `{DEFAULT_BRANCH}` and pull requests
 
 > **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
 
@@ -261,9 +261,10 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If no repo was detected in Step 0:**
 
-1. Run `git init` and set default branch to `main`
-2. Create `.gitignore` (see below)
-3. Create initial commit: `chore: initialize project`
+1. Ask the user what the default branch name should be (suggest `main`, but accept any name such as `master`). Store the answer as `{DEFAULT_BRANCH}`.
+2. Run `git init -b {DEFAULT_BRANCH}` to initialize with that branch name.
+3. Create `.gitignore` (see below)
+4. Create initial commit: `chore: initialize project`
 
 **If a repo already exists (detected in Step 0):**
 
@@ -520,7 +521,7 @@ Next steps:
 
 ```
 
-> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin main`.
+> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin {DEFAULT_BRANCH}`.
 
 If the project was created in the current directory, do NOT include a `cd` step -- the user is already there.
 
