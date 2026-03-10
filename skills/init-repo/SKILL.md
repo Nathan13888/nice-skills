@@ -27,8 +27,8 @@ Before anything else, check the current directory's state:
 
 1. Run `git rev-parse --is-inside-work-tree` to see if the CWD is already inside a git repository (even if it has zero commits or is otherwise empty).
 2. Run `ls -A` to check if the directory has any files/folders at all.
-3. If it IS a git repo, note this -- we will NOT run `git init` later.
-4. If it is NOT a git repo, note this -- we may need to initialize one later.
+3. If it IS a git repo, note this -- we will NOT run `git init` later. Also run `git symbolic-ref --short HEAD` to detect the current default branch name and store it as `{DEFAULT_BRANCH}`.
+4. If it is NOT a git repo, note this -- we may need to initialize one later. `{DEFAULT_BRANCH}` will be determined in Step 8.
 
 Tell the user what you detected:
 
@@ -182,7 +182,9 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 - Format check step (e.g., `biome check`, `ruff format --check`, `cargo fmt --check`)
 - Lint step (using the linter chosen in Step 5)
 - Test step (appropriate test runner)
-- Triggered on push to `main` and pull requests
+- Triggered on push to `{DEFAULT_BRANCH}` and pull requests
+
+> **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
 
 ### Step 7: Licensing
 
@@ -259,9 +261,10 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If no repo was detected in Step 0:**
 
-1. Run `git init` and set default branch to `main`
-2. Create `.gitignore` (see below)
-3. Create initial commit: `chore: initialize project`
+1. Ask the user what the default branch name should be (suggest `main`, but accept any name such as `master`). Store the answer as `{DEFAULT_BRANCH}`.
+2. Run `git init -b {DEFAULT_BRANCH}` to initialize with that branch name.
+3. Create `.gitignore` (see below)
+4. Create initial commit: `chore: initialize project`
 
 **If a repo already exists (detected in Step 0):**
 
@@ -304,49 +307,104 @@ Combine templates into a single `.gitignore` with section headers:
 {fetched macOS.gitignore content}
 ```
 
-### Step 9: Pre-commit Hooks
+### Step 9: Git Hooks
 
-Ask the user if they want pre-commit hooks to enforce formatting and linting before each commit. Options:
+Ask the user if they want git hooks to enforce code quality. Options:
 
-| Option                | Description                         |
-| --------------------- | ----------------------------------- |
-| **Yes** (Recommended) | Catches issues before they reach CI |
-| **No**                | Skip pre-commit hooks               |
+| Option                               | Description                                                       |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| **Yes, with Lefthook** (Recommended) | Universal git hooks manager; works with any language/runtime      |
+| **Yes, with native hooks**           | Language-specific setup (husky, pre-commit framework, .git/hooks) |
+| **No**                               | Skip git hooks                                                    |
 
-If yes, set up hooks based on the runtime:
+The hooks follow this convention:
+
+| Hook           | Action                                                    |
+| -------------- | --------------------------------------------------------- |
+| `pre-commit`   | **Auto-fix** formatting and linting on staged files       |
+| `pre-push`     | **Check** formatting and linting (no fix) + run tests     |
+
+The rationale: `pre-commit` fixes what it can so the developer isn't blocked; `pre-push` is a final gate that catches anything unfixable and runs the full test suite before code reaches the remote.
+
+#### Lefthook (universal, any runtime)
+
+Lefthook is a fast, language-agnostic git hooks manager that works for any runtime.
+
+1. Install lefthook (pick the method appropriate for the project):
+   - npm/bun: `npm install --save-dev lefthook` / `bun add -d lefthook`
+   - Homebrew: `brew install lefthook`
+   - Go: `go install github.com/evilmartians/lefthook@latest`
+   - Or download a binary release from GitHub
+2. Create `lefthook.yml` at the project root. Substitute the actual commands for the chosen runtime and formatter/linter:
+
+```yaml
+pre-commit:
+  commands:
+    format-fix:
+      run: {format fix command}   # e.g. biome format --write, ruff format, cargo fmt
+    lint-fix:
+      run: {lint fix command}     # e.g. biome lint --fix, ruff check --fix, cargo clippy --fix
+
+pre-push:
+  commands:
+    format-check:
+      run: {format check command} # e.g. biome format --check, ruff format --check, cargo fmt --check
+    lint-check:
+      run: {lint check command}   # e.g. biome lint, ruff check, cargo clippy -- -D warnings
+    test:
+      run: {test command}         # e.g. bun test, pytest, cargo test, go test ./...
+```
+
+3. Run `lefthook install` to activate the hooks.
+
+#### Native hooks (language-specific)
+
+If the user prefers native hooks instead:
 
 **TypeScript (Bun/Node.js):**
 
 - Install `husky` and `lint-staged`
-- Configure `lint-staged` in `package.json` to run the chosen formatter/linter on staged files
-- Initialize husky with a `pre-commit` hook that runs `lint-staged`
+- Configure `lint-staged` in `package.json` to run the formatter/linter fix commands on staged files (auto-fix on commit)
+- Initialize husky with:
+  - `pre-commit` hook: runs `lint-staged` (auto-fixes staged files)
+  - `pre-push` hook: runs format check, lint check, and tests
 
 **Python:**
 
 - Install `pre-commit` framework
-- Create `.pre-commit-config.yaml` with hooks for the chosen formatter/linter (e.g., ruff, black)
-- Run `pre-commit install`
+- Create `.pre-commit-config.yaml` with hooks that **fix** (e.g., `ruff format`, `ruff check --fix`)
+- Run `pre-commit install --hook-type pre-commit --hook-type pre-push`
+- Add a `pre-push` stage entry (or a separate `.git/hooks/pre-push` script) that runs format check, lint check, and `pytest`
 
 **Rust:**
 
-- Create a `.git/hooks/pre-commit` script that runs `cargo fmt --check && cargo clippy`
-- Or install `pre-commit` framework with Rust hooks
+- Create `.git/hooks/pre-commit`: runs `cargo fmt` (fix) and `cargo clippy --fix`
+- Create `.git/hooks/pre-push`: runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`
+- Make both scripts executable (`chmod +x`)
 
 **Go:**
 
-- Create a `.git/hooks/pre-commit` script that runs `gofmt` and `go vet` (or `golangci-lint`)
-- Or install `pre-commit` framework with Go hooks
+- Create `.git/hooks/pre-commit`: runs `gofmt -w .` (fix) and applies `golangci-lint run --fix` if available
+- Create `.git/hooks/pre-push`: runs `gofmt -l .` (check), `go vet ./...`, and `go test ./...`
+- Make both scripts executable (`chmod +x`)
 
 ### Step 10: CLAUDE.md
 
-Ask the user if they want a `CLAUDE.md` file created for the project. Options:
+Ask the user if they want an agent context file created for the project. Options:
 
-| Option                | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| **Yes** (Recommended) | Gives Claude context about the project for agentic development |
-| **No**                | Skip CLAUDE.md                                                 |
+| Option                             | Description                                                                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Yes, as `CLAUDE.md`** | Gives Claude context about the project for agentic development                                                       |
+| **Yes, as `AGENTS.md` + symlink ** (recommended)  | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
+| **No**                             | Skip                                                                                                                    |
 
-If yes, create a `CLAUDE.md` file tailored to the project. Use the template below, filling in project-specific details:
+If the user picks **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and then run:
+
+```bash
+ln -s AGENTS.md CLAUDE.md
+```
+
+Regardless of which option is chosen, the file content is identical -- use the template below, filling in project-specific details:
 
 ```markdown
 # {Project Name}
@@ -438,12 +496,14 @@ CI/CD: {ci/cd}
 Pre-commit: {yes/no}
 
 Files created:
-{list of files}
+{list of files -- if AGENTS.md + symlink was chosen, show both AGENTS.md and CLAUDE.md -> AGENTS.md}
 
 Next steps:
 
 1. {install command}
-2. Start building!
+2. Push to GitHub and verify GitHub Actions workflows run correctly
+   - Configure any required secrets in Settings -> Secrets and variables -> Actions
+3. Start building!
 
 ```
 
@@ -458,13 +518,17 @@ CI/CD: {ci/cd}
 Pre-commit: {yes/no}
 
 Files created:
-{list of files}
+{list of files -- if AGENTS.md + symlink was chosen, show both AGENTS.md and CLAUDE.md -> AGENTS.md}
 
 Next steps:
 
-1. Start building!
+1. Push to GitHub and verify GitHub Actions workflows run correctly
+   - Configure any required secrets in Settings -> Secrets and variables -> Actions
+2. Start building!
 
 ```
+
+> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin {DEFAULT_BRANCH}`.
 
 If the project was created in the current directory, do NOT include a `cd` step -- the user is already there.
 
