@@ -19,6 +19,14 @@ Scaffold a new project repository optimized for agentic development from a probl
 
 When invoked, follow the workflow below sequentially. Use `AskUserQuestion` at each decision point to gather user preferences. Do NOT skip steps or assume defaults without asking.
 
+### State Variables
+
+Track these variables throughout the entire workflow. Once set, use the stored value -- never hardcode a branch name like `main` or `master`.
+
+| Variable           | Set in  | Description                                      |
+| ------------------ | ------- | ------------------------------------------------ |
+| `{DEFAULT_BRANCH}` | Step 0 or Step 8 | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
+
 ## Workflow
 
 ### Step 0: Detect Environment
@@ -27,13 +35,19 @@ Before anything else, check the current directory's state:
 
 1. Run `git rev-parse --is-inside-work-tree` to see if the CWD is already inside a git repository (even if it has zero commits or is otherwise empty).
 2. Run `ls -A` to check if the directory has any files/folders at all.
-3. If it IS a git repo, note this -- we will NOT run `git init` later. Also run `git symbolic-ref --short HEAD` to detect the current default branch name and store it as `{DEFAULT_BRANCH}`.
+3. If it IS a git repo, note this -- we will NOT run `git init` later. Run `git symbolic-ref --short HEAD` to detect the current branch name.
 4. If it is NOT a git repo, note this -- we may need to initialize one later. `{DEFAULT_BRANCH}` will be determined in Step 8.
 
 Tell the user what you detected:
 
 - Whether the current directory is a git repo
 - Whether it's empty or has existing files
+
+**If it IS a git repo**, also confirm the default branch with the user:
+
+> I detected the current branch is `{detected branch}`. **What is the default branch for this repository?** (default: `{detected branch}`)
+
+Store the user's answer (or confirmed default) as `{DEFAULT_BRANCH}`. This is critical -- the value will be reused in CI/CD triggers, push commands, and other steps.
 
 Then ask explicitly:
 
@@ -182,7 +196,7 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 - Format check step (e.g., `biome check`, `ruff format --check`, `cargo fmt --check`)
 - Lint step (using the linter chosen in Step 5)
 - Test step (appropriate test runner)
-- Triggered on push to `{DEFAULT_BRANCH}` and pull requests
+- Triggered on push to `{DEFAULT_BRANCH}` and pull requests (**use the exact branch name stored earlier -- do NOT hardcode `main`**)
 
 > **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
 
@@ -261,7 +275,7 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If no repo was detected in Step 0:**
 
-1. Ask the user what the default branch name should be (suggest `main`, but accept any name such as `master`). Store the answer as `{DEFAULT_BRANCH}`.
+1. Ask the user what the default branch name should be (suggest `main` as the default, but accept any name such as `master`, `develop`, `trunk`, etc.). **Store the answer as `{DEFAULT_BRANCH}` -- this value is used in CI/CD triggers (Step 6) and the final push command (Step 11).**
 2. Run `git init -b {DEFAULT_BRANCH}` to initialize with that branch name.
 3. Create `.gitignore` (see below)
 4. Create initial commit: `chore: initialize project`
@@ -528,7 +542,7 @@ Next steps:
 
 ```
 
-> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin {DEFAULT_BRANCH}`.
+> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin {DEFAULT_BRANCH}`. **Use the exact `{DEFAULT_BRANCH}` value confirmed/set earlier -- do NOT substitute `main` or any other name.**
 
 If the project was created in the current directory, do NOT include a `cd` step -- the user is already there.
 
