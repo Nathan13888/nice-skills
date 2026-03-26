@@ -23,8 +23,8 @@ When invoked, follow the workflow below sequentially. Use `AskUserQuestion` at e
 
 Track these variables throughout the entire workflow. Once set, use the stored value -- never hardcode a branch name like `main` or `master`.
 
-| Variable           | Set in  | Description                                      |
-| ------------------ | ------- | ------------------------------------------------ |
+| Variable           | Set in           | Description                                                                                                                                     |
+| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `{DEFAULT_BRANCH}` | Step 0 or Step 8 | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
 
 ## Workflow
@@ -73,10 +73,10 @@ Ask the user what level of scaffolding they want:
 
 > **What would you like to set up?**
 >
-> 1. **Full project** -- scaffold code, tooling, and ops (runtime, package manager, formatter, linter, CI, license, precommits, CLAUDE.md)
-> 2. **Ops only** -- just set up ops tooling (git, .gitignore, license, CI, precommits, CLAUDE.md) without creating project code or installing a runtime/package manager
+> 1. **Full project** -- scaffold code, tooling, and ops (runtime, package manager, formatter, linter, CI, license, precommits, README, CLAUDE.md)
+> 2. **Ops only** -- just set up ops tooling (git, .gitignore, license, CI, precommits, README, CLAUDE.md) without creating project code or installing a runtime/package manager
 
-If the user picks **Ops only**, skip Steps 2-5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, and CLAUDE.md.
+If the user picks **Ops only**, skip Steps 2-5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, README, and CLAUDE.md.
 
 If the user picks **Full project**, continue with Step 2.
 
@@ -210,9 +210,9 @@ Ask the user which license to use. Present the common options prominently:
 | **Apache 2.0**   | `Apache-2.0`  | Permissive | Open source with patent protection                   |
 | **GPL 3.0**      | `GPL-3.0`     | Copyleft   | Requires derivative works stay open                  |
 | **Dual License** | _(see below)_ | Permissive | Two licenses (e.g., MIT + Apache-2.0, Rust standard) |
-| **Proprietary**  | --             | --          | Private/commercial projects                          |
-| **None**         | --             | --          | Skip for now                                         |
-| **Other**        | _(see below)_ | --          | Pick from expanded list                              |
+| **Proprietary**  | --            | --         | Private/commercial projects                          |
+| **None**         | --            | --         | Skip for now                                         |
+| **Other**        | _(see below)_ | --         | Pick from expanded list                              |
 
 <details>
 <summary>Expanded license list (click to show)</summary>
@@ -275,7 +275,7 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If no repo was detected in Step 0:**
 
-1. Ask the user what the default branch name should be (suggest `main` as the default, but accept any name such as `master`, `develop`, `trunk`, etc.). **Store the answer as `{DEFAULT_BRANCH}` -- this value is used in CI/CD triggers (Step 6) and the final push command (Step 11).**
+1. Ask the user what the default branch name should be (suggest `main` as the default, but accept any name such as `master`, `develop`, `trunk`, etc.). **Store the answer as `{DEFAULT_BRANCH}` -- this value is used in CI/CD triggers (Step 6) and the final push command (Step 12).**
 2. Run `git init -b {DEFAULT_BRANCH}` to initialize with that branch name.
 3. Create `.gitignore` (see below)
 4. Create initial commit: `chore: initialize project`
@@ -333,10 +333,10 @@ Ask the user if they want git hooks to enforce code quality. Options:
 
 The hooks follow this convention:
 
-| Hook           | Action                                                    |
-| -------------- | --------------------------------------------------------- |
-| `pre-commit`   | **Auto-fix** formatting and linting on staged files       |
-| `pre-push`     | **Check** formatting and linting (no fix) + run tests     |
+| Hook         | Action                                                |
+| ------------ | ----------------------------------------------------- |
+| `pre-commit` | **Auto-fix** formatting and linting on staged files   |
+| `pre-push`   | **Check** formatting and linting (no fix) + run tests |
 
 The rationale: `pre-commit` fixes what it can so the developer isn't blocked; `pre-push` is a final gate that catches anything unfixable and runs the full test suite before code reaches the remote.
 
@@ -355,18 +355,18 @@ Lefthook is a fast, language-agnostic git hooks manager that works for any runti
 pre-commit:
   commands:
     format-fix:
-      run: {format fix command}   # e.g. biome format --write, ruff format, cargo fmt
+      run: { format fix command } # e.g. biome format --write, ruff format, cargo fmt
     lint-fix:
-      run: {lint fix command}     # e.g. biome lint --fix, ruff check --fix, cargo clippy --fix
+      run: { lint fix command } # e.g. biome lint --fix, ruff check --fix, cargo clippy --fix
 
 pre-push:
   commands:
     format-check:
-      run: {format check command} # e.g. biome format --check, ruff format --check, cargo fmt --check
+      run: { format check command } # e.g. biome format --check, ruff format --check, cargo fmt --check
     lint-check:
-      run: {lint check command}   # e.g. biome lint, ruff check, cargo clippy -- -D warnings
+      run: { lint check command } # e.g. biome lint, ruff check, cargo clippy -- -D warnings
     test:
-      run: {test command}         # e.g. bun test, pytest, cargo test, go test ./...
+      run: { test command } # e.g. bun test, pytest, cargo test, go test ./...
 ```
 
 3. Run `lefthook install` to activate the hooks.
@@ -402,15 +402,95 @@ If the user prefers native hooks instead:
 - Create `.git/hooks/pre-push`: runs `gofmt -l .` (check), `go vet ./...`, and `go test ./...`
 - Make both scripts executable (`chmod +x`)
 
-### Step 10: CLAUDE.md
+### Step 10: README.md
+
+First, check if a `README.md` already exists in the project directory. If it does, ask the user whether to overwrite or skip. Otherwise, ask:
+
+> **Would you like a README.md for the project?**
+>
+> 1. **Yes** (Recommended) -- concise README with project overview and quick start
+> 2. **No** -- skip README creation
+
+If the user picks **Yes**, create `README.md` using the appropriate template below. Fill in all placeholders with the values collected in earlier steps. **Omit any section entirely if that feature was not set up** (e.g., no Git Hooks section if the user skipped Step 9).
+
+#### Full project template
+
+```markdown
+# {Project Name}
+
+{One-line problem description}
+
+## Quick Start
+
+\`\`\`bash
+{install command}
+{run/dev command}
+\`\`\`
+
+## Development
+
+| Command              | Description          |
+| -------------------- | -------------------- |
+| `{install command}`  | Install dependencies |
+| `{run/dev command}`  | Start development    |
+| `{test command}`     | Run tests            |
+| `{format command}`   | Format code          |
+| `{lint fix command}` | Lint and auto-fix    |
+
+## Tech Stack
+
+- **Runtime:** {runtime}
+- **Language:** {language}
+- **Package Manager:** {package manager}
+- **Formatter:** {formatter}
+- **Linter:** {linter}
+
+## Git Hooks
+
+This project uses {Lefthook/husky/pre-commit/native hooks}. Pre-commit hooks auto-fix formatting and linting on staged files. Pre-push hooks run format checks, lint checks, and tests.
+
+## CI/CD
+
+GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRANCH}` and pull requests.
+
+## License
+
+{License name} -- see [LICENSE](LICENSE) for details.
+```
+
+#### Ops-only template
+
+When in ops-only mode (no runtime/language was chosen), use this shorter template. Use the directory name as the heading if no project name was set in Step 2:
+
+```markdown
+# {Project Name or directory name}
+
+{One-line problem description}
+
+## Git Hooks
+
+This project uses {Lefthook/native hooks}. Pre-commit hooks auto-fix formatting and linting on staged files. Pre-push hooks run format checks, lint checks, and tests.
+
+## CI/CD
+
+GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRANCH}` and pull requests.
+
+## License
+
+{License name} -- see [LICENSE](LICENSE) for details.
+```
+
+The README should be **concise** -- no badges, no Contributing section, no boilerplate. Its purpose is to give visitors a quick orientation and prevent AI agents from later generating verbose READMEs.
+
+### Step 11: CLAUDE.md
 
 Ask the user if they want an agent context file created for the project. Options:
 
-| Option                             | Description                                                                                                             |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Yes, as `CLAUDE.md`** | Gives Claude context about the project for agentic development                                                       |
-| **Yes, as `AGENTS.md` + symlink ** (recommended)  | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
-| **No**                             | Skip                                                                                                                    |
+| Option                                           | Description                                                                                                             |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Yes, as `CLAUDE.md`**                          | Gives Claude context about the project for agentic development                                                          |
+| **Yes, as `AGENTS.md` + symlink ** (recommended) | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
+| **No**                                           | Skip                                                                                                                    |
 
 If the user picks **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and then run:
 
@@ -491,7 +571,7 @@ Regardless of which option is chosen, the file content is identical -- use the t
 
 ```
 
-### Step 11: Summary
+### Step 12: Summary
 
 Print a summary of everything that was created. Adapt the summary to the chosen mode:
 
