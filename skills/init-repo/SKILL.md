@@ -258,16 +258,8 @@ When the user selects **Dual License**:
 2. Fetch both license texts in parallel via `WebFetch`
 3. Replace placeholders in both
 4. Create `LICENSE-MIT` and `LICENSE-APACHE` (pattern: `LICENSE-{SHORT-NAME}`)
-5. Create a root `LICENSE` file explaining the dual licensing:
 
-```
-This project is licensed under either of
-
-  * Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
-  * MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
-
-at your option.
-```
+> **Do NOT create a root `LICENSE` or `LICENSE.md` file for dual-licensed projects.** GitHub's license detection cannot parse explanatory text and will show incorrect or confusing license information. The dual-license explanation belongs in the README's License section instead.
 
 ### Step 8: Git Setup
 
@@ -455,7 +447,7 @@ GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRA
 
 ## License
 
-{License name} -- see [LICENSE](LICENSE) for details.
+{License name} -- see [LICENSE](LICENSE) for details. For dual-licensed projects, use instead: `Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.`
 ```
 
 #### Ops-only template
@@ -477,7 +469,7 @@ GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRA
 
 ## License
 
-{License name} -- see [LICENSE](LICENSE) for details.
+{License name} -- see [LICENSE](LICENSE) for details. For dual-licensed projects, use instead: `Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.`
 ```
 
 The README should be **concise** -- no badges, no Contributing section, no boilerplate. Its purpose is to give visitors a quick orientation and prevent AI agents from later generating verbose READMEs.
