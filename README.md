@@ -20,7 +20,7 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 The repo is regularly improved so to update, run:
 
 ```bash
-npx skills upgrade https://github.com/Nathan13888/nice-skills
+npx skills update
 ```
 
 ## Installation

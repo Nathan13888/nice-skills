@@ -25,7 +25,7 @@ Track these variables throughout the entire workflow. Once set, use the stored v
 
 | Variable           | Set in           | Description                                                                                                                                     |
 | ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{DEFAULT_BRANCH}` | Step 0 or Step 8 | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
+| `{DEFAULT_BRANCH}` | Step 0, 6, or 8  | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
 | `{PROJECT_KIND}`   | Step 5.5         | Whether the project is an **Application** (binary/executable) or **Library** (reusable code). Affects which dependencies are suggested.            |
 | `{INSTALLED_DEPS}`  | Step 5.5         | List of recommended dependencies the user chose to install. Used in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).                  |
 | `{LLVM_COV}`       | Step 6.5         | Whether LLVM coverage is enabled (`yes`/`no`). Only set for Rust projects with GitHub Actions CI.                                               |
@@ -80,7 +80,7 @@ Ask the user what level of scaffolding they want:
 > 1. **Full project** -- scaffold code, tooling, and ops (runtime, package manager, formatter, linter, CI, license, precommits, README, CLAUDE.md)
 > 2. **Ops only** -- just set up ops tooling (git, .gitignore, license, CI, precommits, README, CLAUDE.md) without creating project code or installing a runtime/package manager
 
-If the user picks **Ops only**, skip Steps 2-5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, README, and CLAUDE.md.
+If the user picks **Ops only**, skip Steps 2-5.5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, README, and CLAUDE.md.
 
 If the user picks **Full project**, continue with Step 2.
 
@@ -127,7 +127,17 @@ Based on the chosen runtime, initialize the project:
 **Python:**
 
 - Ask: uv, poetry, or pip? (Recommend uv)
-- Run the appropriate init command
+- Run the appropriate init command:
+  - **uv**: `uv init`
+  - **poetry**: `poetry new {project-name}` (or `poetry init` in an existing directory)
+  - **pip**: There is no `pip init`. Create a minimal `pyproject.toml` manually:
+    ```toml
+    [project]
+    name = "{project-name}"
+    version = "0.1.0"
+    requires-python = ">=3.12"
+    dependencies = []
+    ```
 - Set Python version (ask or default to 3.12+): write `requires-python = ">=3.12"` in `pyproject.toml` **and** create a `.python-version` file with the pinned version (e.g., `3.12`)
 - Install `pytest` as a dev dependency: `uv add --dev pytest` / `poetry add --dev pytest` / `pip install pytest` (and add to `requirements-dev.txt`)
 
@@ -142,10 +152,13 @@ channel = "stable"
 components = ["rustfmt", "clippy", "rust-analyzer"]
 ```
 
+- Testing: `cargo test` (built-in, no extra setup required)
+
 **Go:**
 
 - Ask for module path (suggest `github.com/{user}/{project}`)
 - Run `go mod init`
+- Testing: `go test ./...` (built-in, no extra setup required)
 
 ### Step 5: Code Formatting & Linting
 
@@ -184,7 +197,46 @@ Ask the user which formatter and linter to use. Present options based on the cho
 After selection:
 
 1. Install the chosen tools as dev dependencies
-2. Create the appropriate config file(s) (e.g., `biome.json`, `ruff.toml`, `.eslintrc`, `rustfmt.toml`)
+2. Create the appropriate config file(s) using the minimal starter configs below:
+
+   **Biome (`biome.json`):**
+   ```json
+   {
+     "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+     "organizeImports": { "enabled": true },
+     "linter": { "enabled": true, "rules": { "recommended": true } },
+     "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 }
+   }
+   ```
+
+   **ESLint flat config (`eslint.config.js`) with TypeScript:**
+   ```js
+   import tseslint from "typescript-eslint";
+   export default tseslint.config(tseslint.configs.recommended);
+   ```
+
+   **Ruff (`ruff.toml`):**
+   ```toml
+   line-length = 88
+   [lint]
+   select = ["E", "F", "I"]
+   ```
+
+   **rustfmt (`rustfmt.toml`):** Can be empty to use defaults, or add:
+   ```toml
+   edition = "2021"
+   ```
+
+   **golangci-lint (`.golangci.yml`):**
+   ```yaml
+   linters:
+     enable:
+       - gofmt
+       - govet
+       - errcheck
+       - staticcheck
+   ```
+
 3. Add `format`, `lint`, and `lint:fix` scripts to the project's task runner:
    - **TypeScript (Bun/Node.js):** `package.json` scripts
    - **Python:** `Makefile` targets (or `pyproject.toml` scripts if using `uv run`)
@@ -248,6 +300,8 @@ Install commands:
 | `zod`         | Universal | Runtime type validation and schema declaration   |
 | `dotenv`      | Universal | Load environment variables from `.env` files     |
 
+> **Note:** For **Bun** projects, skip `dotenv` -- Bun automatically loads `.env` files at startup via `Bun.env`. `dotenv` is only needed for Node.js.
+
 Install (Bun): `bun add {package}`
 Install (Node.js): `{npm install|yarn add|pnpm add} {package}` (use the package manager chosen in Step 4)
 
@@ -307,11 +361,11 @@ Ask the user what CI/CD they want. Options:
 | -------------------------------- | ------------------------- |
 | **GitHub Actions** (Recommended) | Standard for GitHub repos |
 | **None**                         | Skip CI/CD for now        |
-| **Other**                        | Let user specify          |
+| **Other**                        | Let user specify (ask for the CI system name, then ask for their configuration format and help create a config file, or skip and add a `# TODO: add CI` comment) |
 
 > **Before writing the workflow file:** If `{DEFAULT_BRANCH}` has not been set yet (i.e., no git repo existed at Step 0 and Step 8 has not run yet), ask the user for the default branch name now and store it as `{DEFAULT_BRANCH}`. Do NOT write the CI file with a placeholder -- the branch name must be concrete.
 
-> **Ops-only mode:** If Steps 2-5 were skipped, there is no formatter, linter, or test runner configured. In this case, either skip CI entirely or create a minimal stub workflow with only `actions/checkout@v4` and a `# TODO: add format, lint, and test steps once tooling is set up` comment. Inform the user that CI steps should be filled in after tooling is chosen.
+> **Ops-only mode:** If Steps 2-5.5 were skipped, there is no formatter, linter, or test runner configured. In this case, either skip CI entirely or create a minimal stub workflow with only `actions/checkout@v4` and a `# TODO: add format, lint, and test steps once tooling is set up` comment. Inform the user that CI steps should be filled in after tooling is chosen.
 
 If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
@@ -368,6 +422,18 @@ Store the answer as `{COV_THRESHOLD}`. If "No", leave `{COV_THRESHOLD}` empty.
 
 Based on the user's selections, make the following modifications:
 
+##### Install `cargo-llvm-cov` locally
+
+Instruct the developer to install `cargo-llvm-cov` locally so hooks and task runner commands work:
+
+```bash
+cargo install cargo-llvm-cov  # or: cargo binstall cargo-llvm-cov (faster binary install)
+```
+
+Add this as a prerequisite note in the Summary (Step 12) and CLAUDE.md setup section.
+
+> **CI uses `taiki-e/install-action@cargo-llvm-cov`** (pre-built binary). `cargo install` is only for local developer setup and should NOT be used in CI as it compiles from source and is significantly slower.
+
 ##### Update `rust-toolchain.toml`
 
 Edit the components list to add `llvm-tools-preview`:
@@ -392,11 +458,12 @@ Add a `coverage` job to the workflow. Use `taiki-e/install-action@cargo-llvm-cov
         with:
           components: llvm-tools-preview
       - uses: taiki-e/install-action@cargo-llvm-cov
+      # If {COV_THRESHOLD} is set, combine report generation and threshold check into ONE step:
       - name: Generate coverage report
-        run: cargo llvm-cov --lcov --output-path lcov.info
-      # Include the following step only if {COV_THRESHOLD} is set:
-      - name: Check coverage threshold
-        run: cargo llvm-cov --fail-under-lines {COV_THRESHOLD}
+        run: cargo llvm-cov --lcov --output-path lcov.info --fail-under-lines {COV_THRESHOLD}
+      # If NO threshold is set, omit --fail-under-lines:
+      # - name: Generate coverage report
+      #   run: cargo llvm-cov --lcov --output-path lcov.info
       # Include ONE of the following upload steps based on the user's choice:
       # Codecov:
       - name: Upload to Codecov
@@ -464,6 +531,10 @@ Ask the user which license to use. Present the common options prominently:
 | **None**         | --            | --         | Skip for now                                         |
 | **Other**        | _(see below)_ | --         | Pick from expanded list                              |
 
+> **Proprietary:** Create a `LICENSE` file containing: `Copyright (c) {year} {copyright holder}. All rights reserved.` No permissions are granted beyond reading the source code.
+>
+> **None:** Skip license file creation entirely. Inform the user: "No license has been added. Without a license, the work is technically all rights reserved by default. Consider adding one before making the repository public."
+
 <details>
 <summary>Expanded license list (click to show)</summary>
 
@@ -478,6 +549,8 @@ Ask the user which license to use. Present the common options prominently:
 
 **Other:**
 `CC-BY-4.0` . `CC-BY-SA-4.0` . `OFL-1.1` . `MulanPSL-2.0` . `WTFPL`
+
+> **Warning:** CC licenses (`CC-BY-*`) are designed for creative works (art, documentation, data), **not software**. Creative Commons explicitly recommends against using CC licenses for software. If the user selects a CC license, warn them and suggest alternatives like MIT or Apache-2.0 instead. Proceed only if they confirm after the warning.
 
 </details>
 
@@ -517,16 +590,16 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If no repo was detected in Step 0:**
 
-1. Ask the user what the default branch name should be (suggest `main` as the default, but accept any name such as `master`, `develop`, `trunk`, etc.). **Store the answer as `{DEFAULT_BRANCH}` -- this value is used in CI/CD triggers (Step 6) and the final push command (Step 12).**
+1. If `{DEFAULT_BRANCH}` was already set in Step 6, use that value — do NOT re-ask. Otherwise, ask the user what the default branch name should be (suggest `main` as the default, but accept any name such as `master`, `develop`, `trunk`, etc.) and store as `{DEFAULT_BRANCH}`.
 2. Run `git init -b {DEFAULT_BRANCH}` to initialize with that branch name.
 3. Create `.gitignore` (see below)
-4. Create initial commit: `chore: initialize project`
+
+> **Note:** The initial commit is created at the end of Step 12 (after README, CLAUDE.md, and hooks have all been created). Do NOT commit here.
 
 **If a repo already exists (detected in Step 0):**
 
-1. Ask the user if they want a `.gitignore` created or updated
+1. Ask the user if they want a `.gitignore` created or updated (if updating, append new content below a `# === Added by init-repo ===` header rather than overwriting)
 2. If in **Ops only** mode and no runtime was chosen, ask the user which `.gitignore` template(s) to use (or offer to skip)
-3. Ask the user if they want an initial commit with the scaffolded files
 
 #### Fetching `.gitignore` Templates
 
@@ -538,6 +611,14 @@ Fetch the primary `.gitignore` template for the chosen runtime using `WebFetch`:
 | Python                | `Python` | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Python.gitignore` |
 | Rust                  | `Rust`   | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Rust.gitignore`   |
 | Go                    | `Go`     | `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Go.gitignore`     |
+
+> **Bun projects:** After fetching the Node template, append the following lines if not already present:
+> ```gitignore
+> # === Bun ===
+> bun.lockb
+> bun.lock
+> ```
+> (Bun v1.2+ uses `bun.lock` text format by default; older versions use binary `bun.lockb`. Include both to handle either.)
 
 After fetching the primary template, ask the user if they want additional global ignores appended:
 
@@ -564,6 +645,8 @@ Combine templates into a single `.gitignore` with section headers:
 ```
 
 ### Step 9: Git Hooks
+
+> **Ops-only mode:** If Steps 2-5.5 were skipped (no formatter, linter, or test runner configured), inform the user that hooks requiring those tools cannot be set up yet. Offer to either skip hooks entirely, or create a minimal commit-msg hook that checks for conventional commit format. Do NOT create hooks that reference format/lint/test commands that do not exist.
 
 Ask the user if they want git hooks to enforce code quality. Options:
 
@@ -592,17 +675,27 @@ Lefthook is a fast, language-agnostic git hooks manager that works for any runti
    - Go projects (alternative): `go install github.com/evilmartians/lefthook@latest`
 2. Create `lefthook.yml` at the project root. Substitute the actual commands for the chosen runtime and formatter/linter:
 
-> **Important:** Pre-commit auto-fix commands must operate only on **staged files** to avoid silently modifying unstaged work. Use Lefthook's `{staged_files}` interpolation with a `glob` that matches the language's file extensions. For workspace-level tools like `cargo fmt` that cannot be restricted to individual files, operating on the whole workspace is acceptable.
+> **Important:** Pre-commit auto-fix commands must operate only on **staged files** to avoid silently modifying unstaged work. Use Lefthook's `{staged_files}` interpolation with a `glob` that matches the language's file extensions. For workspace-level tools like `cargo fmt` and `cargo clippy` that cannot be restricted to individual files, operating on the whole workspace is acceptable.
+>
+> **`stage_fixed: true` is required** on format-fix and lint-fix commands. Without it, Lefthook modifies files in the working tree but those modifications are NOT re-staged, so the fixes never enter the commit. This would make auto-fix hooks silently useless.
+>
+> **Rust exception:** `cargo fmt` and `cargo clippy` do NOT accept file arguments. For Rust, **omit `{staged_files}` entirely** -- the glob is used only to trigger the command when `.rs` files are staged, not to pass file names to the command. For all other languages, include `{staged_files}` in the run command.
+>
+> **Glob pattern must be recursive:** Use `"**/*.{ext}"` (not `"*.{ext}"`) to match files in all subdirectories (e.g., `src/`, `lib/`, `tests/`).
 
 ```yaml
 pre-commit:
   commands:
     format-fix:
-      glob: "*.{ext}"  # replace {ext} with your language's extensions, e.g. ts,tsx,js,jsx or py
-      run: { format fix command } {staged_files} # e.g. biome format --write {staged_files}, ruff format {staged_files}, cargo fmt
+      glob: "**/*.{ext}"  # replace {ext} with your language's extensions, e.g. ts,tsx,js,jsx or py
+      stage_fixed: true   # REQUIRED: re-stages files modified by the fix command
+      run: { format fix command } {staged_files} # e.g. biome format --write {staged_files}, ruff format {staged_files}
+      # Rust: run: cargo fmt  (no {staged_files} -- cargo fmt operates on the whole workspace)
     lint-fix:
-      glob: "*.{ext}"
-      run: { lint fix command } {staged_files} # e.g. biome lint --fix {staged_files}, ruff check --fix {staged_files}, cargo clippy --fix --allow-dirty --allow-staged
+      glob: "**/*.{ext}"
+      stage_fixed: true   # REQUIRED: re-stages files modified by the fix command
+      run: { lint fix command } {staged_files} # e.g. biome lint --fix {staged_files}, ruff check --fix {staged_files}
+      # Rust: run: cargo clippy --fix --allow-dirty --allow-staged  (no {staged_files})
 
 pre-push:
   commands:
@@ -625,11 +718,35 @@ If the user prefers native hooks instead:
 
 **TypeScript (Bun/Node.js):**
 
-- Install `husky` and `lint-staged`
-- Configure `lint-staged` in `package.json` to run the formatter/linter fix commands on staged files (auto-fix on commit)
-- Initialize husky with:
-  - `pre-commit` hook: runs `lint-staged` (auto-fixes staged files)
-  - `pre-push` hook: runs format check, lint check, and tests
+1. Install `husky` and `lint-staged`:
+   - Bun: `bun add -d husky lint-staged`
+   - npm/pnpm/yarn: `{pkg manager} add -D husky lint-staged`
+
+2. Initialize husky: `npx husky init` (creates `.husky/` directory and a sample pre-commit file)
+
+3. Configure `lint-staged` in `package.json`:
+   ```json
+   "lint-staged": {
+     "*.{ts,tsx,js,jsx}": [
+       "{ format fix command }",
+       "{ lint fix command }"
+     ]
+   }
+   ```
+
+4. Write `.husky/pre-commit`:
+   ```bash
+   #!/bin/sh
+   npx lint-staged
+   ```
+
+5. Write `.husky/pre-push`:
+   ```bash
+   #!/bin/sh
+   { format check command } && { lint check command } && { test command }
+   ```
+
+6. Add `"prepare": "husky"` to `package.json` scripts so hooks are installed automatically after `npm install`.
 
 **Python:**
 
@@ -651,7 +768,12 @@ If the user prefers native hooks instead:
 
 **Go:**
 
-- Create `.git/hooks/pre-commit`: runs `gofmt -w $(git diff --cached --name-only --diff-filter=d | grep '\.go$')` to fix only staged `.go` files; if golangci-lint is installed (`command -v golangci-lint >/dev/null 2>&1`), also run `golangci-lint run --fix`
+- Create `.git/hooks/pre-commit`: fixes only staged `.go` files. **Must guard against the empty-list case** -- `gofmt -w` with no arguments reads from stdin and hangs forever if no `.go` files are staged. Use:
+  ```bash
+  GO_FILES=$(git diff --cached --name-only --diff-filter=d | grep '\.go$' || true)
+  [ -n "$GO_FILES" ] && gofmt -w $GO_FILES
+  ```
+  If golangci-lint is installed (`command -v golangci-lint >/dev/null 2>&1`), also run it. Note: `golangci-lint run --fix` operates on the entire module, not just staged files -- this is an acceptable exception (like `cargo fmt`) since golangci-lint has no per-file mode.
 - Create `.git/hooks/pre-push`: runs `test -z "$(gofmt -l .)"` (fails non-zero if any files are unformatted -- `gofmt -l` alone exits 0 and would not block the push), `go vet ./...`, and `go test ./...`
 - Make both scripts executable (`chmod +x`)
 
@@ -719,12 +841,20 @@ cargo llvm-cov
 
 ## License
 
-{License name} -- see [LICENSE](LICENSE) for details. For dual-licensed projects, use instead: `Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.`
+{License name} -- see [LICENSE](LICENSE) for details.
+```
+
+For **dual-licensed** projects, replace the License section with:
+
+```markdown
+## License
+
+Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.
 ```
 
 #### Ops-only template
 
-When in ops-only mode (no runtime/language was chosen), use this shorter template. Use the directory name as the heading if no project name was set in Step 2:
+When in ops-only mode (no runtime/language was chosen), use this shorter template. Use the directory name as the heading if no project name was set in Step 2. **Omit any section entirely if that feature was not set up** (e.g., no Git Hooks section if hooks were skipped, no CI/CD section if CI was skipped, no License section if licensing was skipped).
 
 ```markdown
 # {Project Name or directory name}
@@ -741,7 +871,15 @@ GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRA
 
 ## License
 
-{License name} -- see [LICENSE](LICENSE) for details. For dual-licensed projects, use instead: `Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.`
+{License name} -- see [LICENSE](LICENSE) for details.
+```
+
+For **dual-licensed** projects, replace the License section with:
+
+```markdown
+## License
+
+Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.
 ```
 
 The README should be **concise** -- no badges, no Contributing section, no boilerplate. Its purpose is to give visitors a quick orientation and prevent AI agents from later generating verbose READMEs.
@@ -846,6 +984,8 @@ cargo llvm-cov
 
 #### Ops-only template
 
+**Omit any section entirely if that feature was not set up** (e.g., no Git Hooks section if hooks were skipped, no CI/CD section if CI was skipped, no License section if licensing was skipped).
+
 `````markdown
 # {Project Name or directory name}
 
@@ -861,10 +1001,27 @@ GitHub Actions runs checks on pushes to `{DEFAULT_BRANCH}` and pull requests.
 
 ## License
 
-{License name} -- see [LICENSE](LICENSE) for details. For dual-licensed projects, use: `Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.`
+{License name} -- see [LICENSE](LICENSE) for details.
+`````
+
+For **dual-licensed** projects, replace the License section with:
+
+`````markdown
+## License
+
+Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.
 `````
 
 ### Step 12: Summary
+
+**For new repos (git was initialized in Step 8):** Before printing the summary, create the initial commit now that all files (hooks, README, CLAUDE.md) exist:
+
+```bash
+git add -A
+git commit -m "chore: initialize project"
+```
+
+If the user is on an existing repo and requested an initial commit (Step 8), do that now as well.
 
 Print a summary of everything that was created. Adapt the summary to the chosen mode:
 
@@ -944,6 +1101,7 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - For dual-license, fetch both license texts in parallel to minimize latency
 - When adding LLVM coverage for Rust in CI, use `taiki-e/install-action@cargo-llvm-cov` (pre-built binary) -- do NOT use `cargo install cargo-llvm-cov` as it compiles from source and is significantly slower
 - Git hooks should call the task runner coverage command (e.g., `just coverage`) when a task runner is configured; CI always uses raw `cargo llvm-cov` commands directly
-- Pre-commit hooks must only modify staged files -- use `{staged_files}` interpolation in Lefthook, `lint-staged` for TypeScript/Node.js native hooks, and file-list filtering in shell scripts; tools that only operate on the whole workspace (e.g., `cargo fmt`) are acceptable exceptions
+- Pre-commit hooks must only modify staged files -- use `{staged_files}` interpolation in Lefthook, `lint-staged` for TypeScript/Node.js native hooks, and file-list filtering in shell scripts; tools that only operate on the whole workspace (e.g., `cargo fmt`, `cargo clippy --fix`, `golangci-lint run --fix`) are acceptable exceptions because they have no per-file mode
 - `cargo clippy --fix` requires `--allow-dirty --allow-staged` in any git hook context -- without these flags it always fails when files are staged
+- Lefthook pre-commit fix commands **must** include `stage_fixed: true` -- without it, modifications made by the fix command stay in the working tree and are not included in the commit, making auto-fix hooks silently ineffective
 ```
