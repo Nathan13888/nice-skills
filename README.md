@@ -15,6 +15,14 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 - `/send-it`: Push feature branch and create a GitHub PR with structured title and description.
 - `/combine-docs`: Consolidate non-code based documentation in the repository so all existing
 
+## Upgrade
+
+The repo is regularly improved so to update, run:
+
+```bash
+npx skills upgrade https://github.com/Nathan13888/nice-skills
+```
+
 ## Installation
 
 ```bash
