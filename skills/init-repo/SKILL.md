@@ -26,6 +26,8 @@ Track these variables throughout the entire workflow. Once set, use the stored v
 | Variable           | Set in           | Description                                                                                                                                     |
 | ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `{DEFAULT_BRANCH}` | Step 0 or Step 8 | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
+| `{PROJECT_KIND}`   | Step 5.5         | Whether the project is an **Application** (binary/executable) or **Library** (reusable code). Affects which dependencies are suggested.            |
+| `{INSTALLED_DEPS}`  | Step 5.5         | List of recommended dependencies the user chose to install. Used in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).                  |
 
 ## Workflow
 
@@ -180,6 +182,114 @@ After selection:
 1. Install the chosen tools as dev dependencies
 2. Create the appropriate config file(s) (e.g., `biome.json`, `ruff.toml`, `.eslintrc`, `rustfmt.toml`)
 3. Add `format`, `lint`, and `lint:fix` scripts to the project's task runner (e.g., `package.json` scripts, `Makefile`, `Justfile`)
+
+### Step 5.5: Recommended Dependencies
+
+Suggest foundational, best-practice dependencies for the chosen language. All suggestions are opt-in -- the user picks which ones to install. This step focuses on universal/foundational packages, NOT framework-specific choices (web frameworks, CLI parsers, etc.).
+
+#### 1. Determine Project Kind
+
+Ask with `AskUserQuestion`:
+
+> **Is this an application or a library?**
+>
+> 1. **Application** -- binary/executable (CLI, server, script, etc.)
+> 2. **Library** -- reusable code consumed by other projects
+
+Store the answer as `{PROJECT_KIND}`.
+
+#### 2. Present Dependency Recommendations
+
+Based on the chosen language (Step 3) and `{PROJECT_KIND}`, present dependencies using `AskUserQuestion` with a multi-select prompt. Show **Universal** deps (recommended for all projects) and, for applications, **Application-only** deps. For libraries, do NOT show application-only deps.
+
+> **Here are recommended foundational dependencies for {language}.** Select the ones you want to install (or select none to skip):
+
+Only show the table for the language chosen in Step 3.
+
+---
+
+**Rust:**
+
+| Dependency                              | Category         | Description                                     |
+| --------------------------------------- | ---------------- | ----------------------------------------------- |
+| `tracing`                               | Universal        | Structured, async-aware diagnostic logging       |
+| `thiserror`                             | Universal        | Derive macro for `std::error::Error`             |
+| `serde` (derive feature) + `serde_json` | Universal        | Serialization/deserialization framework           |
+| `eyre` + `color-eyre`                   | Application only | Flexible, colorful error reporting for apps      |
+| `tracing-subscriber`                    | Application only | Configures `tracing` output for apps             |
+| `tokio` (full feature)                  | Application only | Async runtime                                    |
+
+Conditional logic:
+- If `tracing` is selected and `{PROJECT_KIND}` is **Application**, automatically include `tracing-subscriber` -- inform the user: "Adding `tracing-subscriber` since `tracing` needs a subscriber configured in the application to produce output."
+- For **Library** projects, do NOT suggest `eyre`/`color-eyre` or `tracing-subscriber`. Libraries should not configure the tracing subscriber or choose an error reporter -- that is the consuming application's responsibility.
+
+Install commands:
+- `cargo add tracing`
+- `cargo add thiserror`
+- `cargo add serde --features derive` and `cargo add serde_json`
+- `cargo add eyre` and `cargo add color-eyre`
+- `cargo add tracing-subscriber`
+- `cargo add tokio --features full`
+
+---
+
+**TypeScript (Bun / Node.js):**
+
+| Dependency    | Category  | Description                                      |
+| ------------- | --------- | ------------------------------------------------ |
+| `zod`         | Universal | Runtime type validation and schema declaration   |
+| `dotenv`      | Universal | Load environment variables from `.env` files     |
+
+Install (Bun): `bun add {package}`
+Install (Node.js): `{npm install|yarn add|pnpm add} {package}` (use the package manager chosen in Step 4)
+
+---
+
+**Python:**
+
+| Dependency      | Category  | Description                                      |
+| --------------- | --------- | ------------------------------------------------ |
+| `pydantic`      | Universal | Data validation using Python type annotations    |
+| `python-dotenv` | Universal | Load environment variables from `.env` files     |
+| `httpx`         | Universal | Modern async/sync HTTP client                    |
+
+Install:
+- **uv**: `uv add {package}`
+- **poetry**: `poetry add {package}`
+- **pip**: `pip install {package}` (and add to `requirements.txt`)
+
+---
+
+**Go:**
+
+Go's standard library covers most foundational needs. Only suggest external dependencies when they provide substantial value over stdlib.
+
+| Dependency                 | Category  | Description                          |
+| -------------------------- | --------- | ------------------------------------ |
+| `github.com/rs/zerolog`    | Universal | High-performance structured logging  |
+
+Install: `go get {module_path}`
+
+---
+
+#### 3. Install Selected Dependencies
+
+For each dependency the user selected:
+
+1. Run the appropriate install command (see tables above)
+2. If a command fails, report the error and continue with the remaining dependencies -- do not abort the entire step
+3. For crates/packages with feature flags, use the correct flags as noted in the tables
+
+After all installations complete, summarize what was installed:
+
+> **Installed dependencies:**
+> - {dep1} -- {description}
+> - {dep2} -- {description}
+>
+> **Skipped / failed (if any):**
+> - {dep3} -- {reason}
+
+Store the list of successfully installed dependencies as `{INSTALLED_DEPS}` for use in the README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).
 
 ### Step 6: CI/CD
 
@@ -436,6 +546,7 @@ If the user picks **Yes**, create `README.md` using the appropriate template bel
 - **Package Manager:** {package manager}
 - **Formatter:** {formatter}
 - **Linter:** {linter}
+- **Key Dependencies:** {comma-separated list from {INSTALLED_DEPS}, or omit this line if none were installed}
 
 ## Git Hooks
 
@@ -504,6 +615,7 @@ Regardless of which option is chosen, the file content is identical -- use the t
 - **Package Manager:** {package manager}
 - **Formatter:** {formatter}
 - **Linter:** {linter}
+- **Key Dependencies:** {comma-separated list from {INSTALLED_DEPS}, or omit this line if none were installed}
 
 ## Project Structure
 ```
@@ -577,6 +689,7 @@ Runtime: {runtime}
 Package Manager: {pkg manager}
 Formatter: {formatter}
 Linter: {linter}
+Dependencies: {count} installed ({comma-separated names from {INSTALLED_DEPS}}, or "none" if skipped)
 License: {license(s)}
 CI/CD: {ci/cd}
 Pre-commit: {yes/no}
