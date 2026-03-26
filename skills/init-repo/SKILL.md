@@ -115,19 +115,21 @@ Based on the chosen runtime, initialize the project:
 **TypeScript (Bun)** (Recommended for TypeScript):
 
 - Run `bun init`
-- Create `tsconfig.json` with strict mode
+- Update `tsconfig.json` with strict mode (Bun generates one; overwrite the compiler options to enable strict mode)
 
 **TypeScript (Node.js):**
 
 - Ask: npm, yarn, or pnpm? (Recommend pnpm)
 - Run the appropriate init command
 - Create `tsconfig.json` with strict mode
+- Ask: Which test runner? (Recommend **Vitest** for TypeScript; alternatives: Jest, `node --test` built-in). Install as a dev dependency (e.g., `pnpm add -D vitest`)
 
 **Python:**
 
 - Ask: uv, poetry, or pip? (Recommend uv)
 - Run the appropriate init command
-- Set Python version (ask or default to 3.12+)
+- Set Python version (ask or default to 3.12+): write `requires-python = ">=3.12"` in `pyproject.toml` **and** create a `.python-version` file with the pinned version (e.g., `3.12`)
+- Install `pytest` as a dev dependency: `uv add --dev pytest` / `poetry add --dev pytest` / `pip install pytest` (and add to `requirements-dev.txt`)
 
 **Rust:**
 
@@ -183,7 +185,11 @@ After selection:
 
 1. Install the chosen tools as dev dependencies
 2. Create the appropriate config file(s) (e.g., `biome.json`, `ruff.toml`, `.eslintrc`, `rustfmt.toml`)
-3. Add `format`, `lint`, and `lint:fix` scripts to the project's task runner (e.g., `package.json` scripts, `Makefile`, `Justfile`)
+3. Add `format`, `lint`, and `lint:fix` scripts to the project's task runner:
+   - **TypeScript (Bun/Node.js):** `package.json` scripts
+   - **Python:** `Makefile` targets (or `pyproject.toml` scripts if using `uv run`)
+   - **Rust:** `Justfile` (recommended -- ask if `just` is available, otherwise fall back to `Makefile`)
+   - **Go:** `Makefile` (idiomatic; offer `Justfile` as an alternative if the user prefers it)
 
 ### Step 5.5: Recommended Dependencies
 
@@ -303,11 +309,15 @@ Ask the user what CI/CD they want. Options:
 | **None**                         | Skip CI/CD for now        |
 | **Other**                        | Let user specify          |
 
+> **Before writing the workflow file:** If `{DEFAULT_BRANCH}` has not been set yet (i.e., no git repo existed at Step 0 and Step 8 has not run yet), ask the user for the default branch name now and store it as `{DEFAULT_BRANCH}`. Do NOT write the CI file with a placeholder -- the branch name must be concrete.
+
+> **Ops-only mode:** If Steps 2-5 were skipped, there is no formatter, linter, or test runner configured. In this case, either skip CI entirely or create a minimal stub workflow with only `actions/checkout@v4` and a `# TODO: add format, lint, and test steps once tooling is set up` comment. Inform the user that CI steps should be filled in after tooling is chosen.
+
 If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
 - Format check step (e.g., `biome check`, `ruff format --check`, `cargo fmt --check`)
 - Lint step (using the linter chosen in Step 5)
-- Test step (appropriate test runner)
+- Test step (appropriate test runner for the chosen runtime) -- omit this step if no test framework has been installed
 - Triggered on push to `{DEFAULT_BRANCH}` and pull requests (**use the exact branch name stored earlier -- do NOT hardcode `main`**)
 
 > **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
@@ -408,18 +418,34 @@ Add a `coverage` job to the workflow. Use `taiki-e/install-action@cargo-llvm-cov
 
 If the project has a `Makefile`, `Justfile`, or similar task runner (set up in Step 5 alongside `format`, `lint`, and `lint:fix`), add a `coverage` recipe/target. This is what git hooks will call. **CI does NOT use the task runner** -- it runs `cargo llvm-cov` directly.
 
-Example for a `Justfile`:
+If `{COV_THRESHOLD}` is set, include `--fail-under-lines {COV_THRESHOLD}`. If not, omit it.
+
+Example for a `Justfile` (with threshold):
 
 ```just
 coverage:
-    cargo llvm-cov{{if COV_THRESHOLD}} --fail-under-lines {COV_THRESHOLD}{{endif}}
+    cargo llvm-cov --fail-under-lines {COV_THRESHOLD}
 ```
 
-Example for a `Makefile`:
+Example for a `Justfile` (no threshold):
+
+```just
+coverage:
+    cargo llvm-cov
+```
+
+Example for a `Makefile` (with threshold):
 
 ```make
 coverage:
-	cargo llvm-cov{{if COV_THRESHOLD}} --fail-under-lines {COV_THRESHOLD}{{endif}}
+	cargo llvm-cov --fail-under-lines {COV_THRESHOLD}
+```
+
+Example for a `Makefile` (no threshold):
+
+```make
+coverage:
+	cargo llvm-cov
 ```
 
 If no task runner exists, the git hooks (Step 9) will call `cargo llvm-cov` directly.
@@ -481,7 +507,7 @@ When the user selects **Dual License**:
 1. Ask which two licenses to combine (recommend **MIT + Apache-2.0**, the Rust ecosystem standard)
 2. Fetch both license texts in parallel via `WebFetch`
 3. Replace placeholders in both
-4. Create `LICENSE-MIT` and `LICENSE-APACHE` (pattern: `LICENSE-{SHORT-NAME}`)
+4. Create `LICENSE-MIT` and `LICENSE-APACHE` (pattern: `LICENSE-{SHORT-NAME}`). Use these short names for common licenses: MIT → `MIT`, Apache-2.0 → `APACHE`, GPL-3.0 → `GPL3`, GPL-2.0 → `GPL2`, LGPL-2.1 → `LGPL`, MPL-2.0 → `MPL2`. For unlisted licenses, use a short uppercase identifier derived from the SPDX ID.
 
 > **Do NOT create a root `LICENSE` or `LICENSE.md` file for dual-licensed projects.** GitHub's license detection cannot parse explanatory text and will show incorrect or confusing license information. The dual-license explanation belongs in the README's License section instead.
 
@@ -561,19 +587,22 @@ The rationale: `pre-commit` fixes what it can so the developer isn't blocked; `p
 Lefthook is a fast, language-agnostic git hooks manager that works for any runtime.
 
 1. Install lefthook (pick the method appropriate for the project):
-   - npm/bun: `npm install --save-dev lefthook` / `bun add -d lefthook`
-   - Homebrew: `brew install lefthook`
-   - Go: `go install github.com/evilmartians/lefthook@latest`
-   - Or download a binary release from GitHub
+   - TypeScript/Bun projects: `npm install --save-dev lefthook` / `bun add -d lefthook`
+   - Rust/Go/Python projects (no npm): `brew install lefthook` (macOS/Linux via Homebrew) or download a binary release from GitHub
+   - Go projects (alternative): `go install github.com/evilmartians/lefthook@latest`
 2. Create `lefthook.yml` at the project root. Substitute the actual commands for the chosen runtime and formatter/linter:
+
+> **Important:** Pre-commit auto-fix commands must operate only on **staged files** to avoid silently modifying unstaged work. Use Lefthook's `{staged_files}` interpolation with a `glob` that matches the language's file extensions. For workspace-level tools like `cargo fmt` that cannot be restricted to individual files, operating on the whole workspace is acceptable.
 
 ```yaml
 pre-commit:
   commands:
     format-fix:
-      run: { format fix command } # e.g. biome format --write, ruff format, cargo fmt
+      glob: "*.{ext}"  # replace {ext} with your language's extensions, e.g. ts,tsx,js,jsx or py
+      run: { format fix command } {staged_files} # e.g. biome format --write {staged_files}, ruff format {staged_files}, cargo fmt
     lint-fix:
-      run: { lint fix command } # e.g. biome lint --fix, ruff check --fix, cargo clippy --fix
+      glob: "*.{ext}"
+      run: { lint fix command } {staged_files} # e.g. biome lint --fix {staged_files}, ruff check --fix {staged_files}, cargo clippy --fix --allow-dirty --allow-staged
 
 pre-push:
   commands:
@@ -605,13 +634,15 @@ If the user prefers native hooks instead:
 **Python:**
 
 - Install `pre-commit` framework
-- Create `.pre-commit-config.yaml` with hooks that **fix** (e.g., `ruff format`, `ruff check --fix`)
+- Create `.pre-commit-config.yaml` with:
+  - Pre-commit stage hooks that **fix** (e.g., `ruff format`, `ruff check --fix`)
+  - Pre-push stage hooks for format check, lint check, and `pytest` using `stages: [pre-push]`
 - Run `pre-commit install --hook-type pre-commit --hook-type pre-push`
-- Add a `pre-push` stage entry (or a separate `.git/hooks/pre-push` script) that runs format check, lint check, and `pytest`
+- Do **NOT** create a separate `.git/hooks/pre-push` script -- `pre-commit install --hook-type pre-push` already writes that file, and a manual script would overwrite the framework's hook
 
 **Rust:**
 
-- Create `.git/hooks/pre-commit`: runs `cargo fmt` (fix) and `cargo clippy --fix`
+- Create `.git/hooks/pre-commit`: runs `cargo fmt` (fix) and `cargo clippy --fix --allow-dirty --allow-staged` (`--allow-dirty --allow-staged` is required because `cargo fix` refuses to run when files are staged, which is always the case in a pre-commit hook)
 - Create `.git/hooks/pre-push`: runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`
 - If `{LLVM_COV}` is `yes` and hooks coverage was selected, also append a coverage step to `.git/hooks/pre-push`:
   - If a task runner exists: call `just coverage` (or the equivalent Make target)
@@ -620,8 +651,8 @@ If the user prefers native hooks instead:
 
 **Go:**
 
-- Create `.git/hooks/pre-commit`: runs `gofmt -w .` (fix) and applies `golangci-lint run --fix` if available
-- Create `.git/hooks/pre-push`: runs `gofmt -l .` (check), `go vet ./...`, and `go test ./...`
+- Create `.git/hooks/pre-commit`: runs `gofmt -w $(git diff --cached --name-only --diff-filter=d | grep '\.go$')` to fix only staged `.go` files; if golangci-lint is installed (`command -v golangci-lint >/dev/null 2>&1`), also run `golangci-lint run --fix`
+- Create `.git/hooks/pre-push`: runs `test -z "$(gofmt -l .)"` (fails non-zero if any files are unformatted -- `gofmt -l` alone exits 0 and would not block the push), `go vet ./...`, and `go test ./...`
 - Make both scripts executable (`chmod +x`)
 
 ### Step 10: README.md
@@ -731,9 +762,11 @@ If the user picks **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and 
 ln -s AGENTS.md CLAUDE.md
 ```
 
-Regardless of which option is chosen, the file content is identical -- use the template below, filling in project-specific details:
+Use the appropriate template below based on the mode chosen in Step 1.5. Fill in all placeholders with values collected in earlier steps. **Omit any section that was not set up** (e.g., no Coverage section if `{LLVM_COV}` is not `yes`).
 
-```markdown
+#### Full project template
+
+`````markdown
 # {Project Name}
 
 {One-line problem description}
@@ -748,11 +781,10 @@ Regardless of which option is chosen, the file content is identical -- use the t
 - **Key Dependencies:** {comma-separated list from {INSTALLED_DEPS}, or omit this line if none were installed}
 
 ## Project Structure
+
 ```
-
 {tree of created files/dirs}
-
-````
+```
 
 ## Development
 
@@ -760,7 +792,7 @@ Regardless of which option is chosen, the file content is identical -- use the t
 
 ```bash
 {install command}
-````
+```
 
 ### Run
 
@@ -810,8 +842,27 @@ cargo llvm-cov
 ## Architecture
 
 {Brief description of intended architecture based on the problem}
+`````
 
-```
+#### Ops-only template
+
+`````markdown
+# {Project Name or directory name}
+
+{One-line problem description}
+
+## Git Hooks
+
+This project uses {Lefthook/native hooks}. Pre-commit hooks auto-fix formatting and linting on staged files. Pre-push hooks run format checks, lint checks, and tests.
+
+## CI/CD
+
+GitHub Actions runs checks on pushes to `{DEFAULT_BRANCH}` and pull requests.
+
+## License
+
+{License name} -- see [LICENSE](LICENSE) for details. For dual-licensed projects, use: `Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at your option.`
+`````
 
 ### Step 12: Summary
 
@@ -867,7 +918,12 @@ Next steps:
 
 ```
 
-> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then push with `git push -u origin {DEFAULT_BRANCH}`. **Use the exact `{DEFAULT_BRANCH}` value confirmed/set earlier -- do NOT substitute `main` or any other name.**
+> **Reminder:** GitHub Actions workflows only run once the repository is pushed to GitHub. If you haven't created the remote repository yet, do that first (`gh repo create` or via the GitHub UI), then add the remote and push:
+> ```bash
+> git remote add origin {remote URL}
+> git push -u origin {DEFAULT_BRANCH}
+> ```
+> **Use the exact `{DEFAULT_BRANCH}` value confirmed/set earlier -- do NOT substitute `main` or any other name.** The remote name `origin` is conventional; if the user has a different remote name, use that instead.
 
 If the project was created in the current directory, do NOT include a `cd` step -- the user is already there.
 
@@ -888,4 +944,6 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - For dual-license, fetch both license texts in parallel to minimize latency
 - When adding LLVM coverage for Rust in CI, use `taiki-e/install-action@cargo-llvm-cov` (pre-built binary) -- do NOT use `cargo install cargo-llvm-cov` as it compiles from source and is significantly slower
 - Git hooks should call the task runner coverage command (e.g., `just coverage`) when a task runner is configured; CI always uses raw `cargo llvm-cov` commands directly
+- Pre-commit hooks must only modify staged files -- use `{staged_files}` interpolation in Lefthook, `lint-staged` for TypeScript/Node.js native hooks, and file-list filtering in shell scripts; tools that only operate on the whole workspace (e.g., `cargo fmt`) are acceptable exceptions
+- `cargo clippy --fix` requires `--allow-dirty --allow-staged` in any git hook context -- without these flags it always fails when files are staged
 ```
