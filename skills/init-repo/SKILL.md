@@ -26,10 +26,11 @@ Track these variables throughout the entire workflow. Once set, use the stored v
 | Variable           | Set in           | Description                                                                                                                                     |
 | ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `{DEFAULT_BRANCH}` | Step 0, 6, or 8  | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
-| `{PROJECT_KIND}`   | Step 5.5         | Whether the project is an **Application** (binary/executable) or **Library** (reusable code). Affects which dependencies are suggested.            |
+| `{PROJECT_KIND}`   | Step 4 (Rust) or Step 5.5 | Whether the project is an **Application** (binary/executable) or **Library** (reusable code). For Rust, set in Step 4 because it determines the `cargo init` command; for all other runtimes, set in Step 5.5. |
 | `{INSTALLED_DEPS}`  | Step 5.5         | List of recommended dependencies the user chose to install. Used in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).                  |
 | `{LLVM_COV}`       | Step 6.5         | Whether LLVM coverage is enabled (`yes`/`no`). Only set for Rust projects with GitHub Actions CI.                                               |
 | `{COV_THRESHOLD}`  | Step 6.5         | Minimum coverage percentage (e.g., `80`), or empty if no threshold enforced.                                                                    |
+| `{PACKAGES}`       | Step 9           | List of packages for multi-package projects. Each entry: `{name, dir, lang, exts, format_fix_cmd, lint_fix_cmd, format_check_cmd, lint_check_cmd, test_cmd, coverage_cmd}`. Only set when the project has multiple packages with different toolchains. |
 
 ## Workflow
 
@@ -116,6 +117,24 @@ Based on the chosen runtime, initialize the project:
 
 - Run `bun init`
 - Update `tsconfig.json` with strict mode (Bun generates one; overwrite the compiler options to enable strict mode)
+- Refactor the generated entry point to export a testable function, and create a test file so `bun test` passes immediately and coverage tools report non-zero from the first commit:
+  ```typescript
+  // index.ts
+  export function greet(name: string): string {
+    return `Hello, ${name}!`;
+  }
+
+  console.log(greet("world"));
+  ```
+  ```typescript
+  // index.test.ts
+  import { expect, test } from "bun:test";
+  import { greet } from "./index";
+
+  test("greet returns greeting", () => {
+    expect(greet("world")).toBe("Hello, world!");
+  });
+  ```
 
 **TypeScript (Node.js):**
 
@@ -123,6 +142,40 @@ Based on the chosen runtime, initialize the project:
 - Run the appropriate init command
 - Create `tsconfig.json` with strict mode
 - Ask: Which test runner? (Recommend **Vitest** for TypeScript; alternatives: Jest, `node --test` built-in). Install as a dev dependency (e.g., `pnpm add -D vitest`)
+- Create a testable entry point and test file so `{test command}` passes immediately:
+  - Entry file (e.g., `src/index.ts`):
+    ```typescript
+    export function greet(name: string): string {
+      return `Hello, ${name}!`;
+    }
+    ```
+  - Test file using the chosen runner. **Vitest** (`src/index.test.ts`):
+    ```typescript
+    import { expect, test } from "vitest";
+    import { greet } from "./index";
+
+    test("greet returns greeting", () => {
+      expect(greet("world")).toBe("Hello, world!");
+    });
+    ```
+  - **Jest** (`src/index.test.ts`):
+    ```typescript
+    import { greet } from "./index";
+
+    test("greet returns greeting", () => {
+      expect(greet("world")).toBe("Hello, world!");
+    });
+    ```
+  - **`node --test`** (`src/index.test.ts`):
+    ```typescript
+    import { strictEqual } from "node:assert";
+    import { test } from "node:test";
+    import { greet } from "./index.js";
+
+    test("greet returns greeting", () => {
+      strictEqual(greet("world"), "Hello, world!");
+    });
+    ```
 
 **Python:**
 
@@ -140,10 +193,30 @@ Based on the chosen runtime, initialize the project:
     ```
 - Set Python version (ask or default to 3.12+): write `requires-python = ">=3.12"` in `pyproject.toml` **and** create a `.python-version` file with the pinned version (e.g., `3.12`)
 - Install `pytest` as a dev dependency: `uv add --dev pytest` / `poetry add --dev pytest` / `pip install pytest` (and add to `requirements-dev.txt`)
+- Ensure the entry point exports a testable function and create a test so `pytest` passes immediately:
+  ```python
+  # src/{project_name}/main.py  (or the entry module uv/poetry generated)
+  def greet(name: str) -> str:
+      return f"Hello, {name}!"
+
+  if __name__ == "__main__":
+      print(greet("world"))
+  ```
+  ```python
+  # tests/test_main.py
+  from {project_name}.main import greet
+
+  def test_greet() -> None:
+      assert greet("world") == "Hello, world!"
+  ```
 
 **Rust:**
 
-- Run `cargo init`
+- Before running `cargo init`, ask whether this is an application or library (this affects the init command and file structure). Store the answer as `{PROJECT_KIND}` and **skip this question in Step 5.5** since it was already answered:
+  > **Is this a Rust application or library?**
+  > 1. **Application** -- binary/executable (CLI, server, daemon, etc.)
+  > 2. **Library** -- reusable crate consumed by other projects
+- Run `cargo init` (for applications) or `cargo init --lib` (for libraries)
 - Create `rust-toolchain.toml` to pin the toolchain and ensure all contributors have formatting/linting/editor components:
 
 ```toml
@@ -152,13 +225,62 @@ channel = "stable"
 components = ["rustfmt", "clippy", "rust-analyzer"]
 ```
 
-- Testing: `cargo test` (built-in, no extra setup required)
+- For **applications** (`cargo init`): refactor `src/main.rs` to extract a testable function so `cargo test` passes and `cargo llvm-cov` reports non-zero coverage from the first commit:
+  ```rust
+  fn greeting() -> &'static str {
+      "Hello, world!"
+  }
+
+  fn main() {
+      println!("{}", greeting());
+  }
+
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_greeting() {
+          assert_eq!(greeting(), "Hello, world!");
+      }
+  }
+  ```
+- For **libraries** (`cargo init --lib`): `cargo init --lib` already generates `src/lib.rs` with a passing `it_works` test -- no additional refactoring needed.
 
 **Go:**
 
 - Ask for module path (suggest `github.com/{user}/{project}`)
 - Run `go mod init`
-- Testing: `go test ./...` (built-in, no extra setup required)
+- Create a testable entry point and test file so `go test ./...` passes immediately:
+  ```go
+  // main.go
+  package main
+
+  import "fmt"
+
+  // Greet returns a greeting string. Exported so it can be tested.
+  func Greet(name string) string {
+  	return fmt.Sprintf("Hello, %s!", name)
+  }
+
+  func main() {
+  	fmt.Println(Greet("world"))
+  }
+  ```
+  ```go
+  // main_test.go
+  package main
+
+  import "testing"
+
+  func TestGreet(t *testing.T) {
+  	got := Greet("world")
+  	want := "Hello, world!"
+  	if got != want {
+  		t.Errorf("Greet() = %q, want %q", got, want)
+  	}
+  }
+  ```
 
 ### Step 5: Code Formatting & Linting
 
@@ -249,7 +371,9 @@ Suggest foundational, best-practice dependencies for the chosen language. All su
 
 #### 1. Determine Project Kind
 
-Ask with `AskUserQuestion`:
+> **Skip this question if `{PROJECT_KIND}` was already set in Step 4** (this happens for Rust projects, where the question is asked earlier because it affects `cargo init`).
+
+Otherwise, ask with `AskUserQuestion`:
 
 > **Is this an application or a library?**
 >
@@ -517,6 +641,8 @@ coverage:
 
 If no task runner exists, the git hooks (Step 9) will call `cargo llvm-cov` directly.
 
+> **Coverage from day one:** If a coverage threshold is set, the scaffolded `src/main.rs` from Step 4 already includes a test covering `greeting()`, which ensures `cargo llvm-cov` reports non-zero coverage on the initial scaffold. Remind the user to raise the threshold as they add more code and tests.
+
 ### Step 7: Licensing
 
 Ask the user which license to use. Present the common options prominently:
@@ -670,10 +796,27 @@ The rationale: `pre-commit` fixes what it can so the developer isn't blocked; `p
 Lefthook is a fast, language-agnostic git hooks manager that works for any runtime.
 
 1. Install lefthook (pick the method appropriate for the project):
-   - TypeScript/Bun projects: `npm install --save-dev lefthook` / `bun add -d lefthook`
-   - Rust/Go/Python projects (no npm): `brew install lefthook` (macOS/Linux via Homebrew) or download a binary release from GitHub
+   - TypeScript/Bun single-package projects: `npm install --save-dev lefthook` / `bun add -d lefthook`
+   - Rust/Go/Python single-package projects (no npm): `brew install lefthook` (macOS/Linux via Homebrew) or download a binary release from GitHub
    - Go projects (alternative): `go install github.com/evilmartians/lefthook@latest`
-2. Create `lefthook.yml` at the project root. Substitute the actual commands for the chosen runtime and formatter/linter:
+   - **Multi-package / mixed-runtime projects:** Use `brew install lefthook` or the binary release regardless of which runtimes are present -- do NOT use a package manager install (e.g., `npm install`) as it would only be available within one package's scope
+2. Determine how many packages this project has. If the project is a **monorepo** or has **multiple packages with different toolchains** (e.g., a `server/` in Go and a `web/` in TypeScript, or an `api/` in Rust, `dashboard/` in TypeScript, and `worker/` in Python), ask the user:
+
+   > **Does this project have multiple packages with different toolchains?**
+   >
+   > 1. **No — single package** (most projects)
+   > 2. **Yes — multiple packages** (monorepo or multi-language project)
+
+   If "Yes", ask for each package:
+   - **Name** (used in hook command names, e.g., `api`, `web`, `worker`) -- suggest names based on the project description
+   - **Directory path** relative to the project root (e.g., `packages/api/`, `apps/web/`)
+   - **Language/runtime** (determines format/lint/test commands)
+
+   Store as `{PACKAGES}` list. The number of packages is determined by the user -- there is no limit.
+
+   Use the **single-package template** when `{PACKAGES}` has one entry; use the **multi-package template** when it has two or more.
+
+3. Create `lefthook.yml` at the project root. Substitute the actual commands for the chosen runtime and formatter/linter:
 
 > **Important:** Pre-commit auto-fix commands must operate only on **staged files** to avoid silently modifying unstaged work. Use Lefthook's `{staged_files}` interpolation with a `glob` that matches the language's file extensions. For workspace-level tools like `cargo fmt` and `cargo clippy` that cannot be restricted to individual files, operating on the whole workspace is acceptable.
 >
@@ -683,15 +826,20 @@ Lefthook is a fast, language-agnostic git hooks manager that works for any runti
 >
 > **Glob pattern must be recursive:** Use `"**/*.{ext}"` (not `"*.{ext}"`) to match files in all subdirectories (e.g., `src/`, `lib/`, `tests/`).
 
+##### Single-package `lefthook.yml`
+
 ```yaml
 pre-commit:
+  piped: true  # Runs command groups sequentially by priority; same-priority commands run in parallel
   commands:
     format-fix:
+      priority: 1
       glob: "**/*.{ext}"  # replace {ext} with your language's extensions, e.g. ts,tsx,js,jsx or py
       stage_fixed: true   # REQUIRED: re-stages files modified by the fix command
       run: { format fix command } {staged_files} # e.g. biome format --write {staged_files}, ruff format {staged_files}
       # Rust: run: cargo fmt  (no {staged_files} -- cargo fmt operates on the whole workspace)
     lint-fix:
+      priority: 2  # Runs AFTER format-fix completes (formatting can affect lint output)
       glob: "**/*.{ext}"
       stage_fixed: true   # REQUIRED: re-stages files modified by the fix command
       run: { lint fix command } {staged_files} # e.g. biome lint --fix {staged_files}, ruff check --fix {staged_files}
@@ -710,9 +858,138 @@ pre-push:
       run: { just coverage | cargo llvm-cov [--fail-under-lines {COV_THRESHOLD}] } # use task runner command if available, otherwise raw cargo llvm-cov
 ```
 
-3. Run `lefthook install` to activate the hooks.
+##### Multi-package `lefthook.yml`
+
+Use `piped: true` on `pre-commit` to enforce the format → lint ordering while running each phase's commands in parallel across packages. Use `parallel: true` on `pre-push` so all checks across all packages run concurrently (they are all read-only).
+
+**Command naming convention:** `{action}-{pkg.name}` (e.g., `format-fix-api`, `lint-check-web`, `test-worker`).
+
+The template below shows the *pattern* with placeholder package names. Generate one entry per package in `{PACKAGES}` — the actual names, paths, and commands are derived from the user's choices and may be 2, 3, 6, or more packages.
+
+```yaml
+pre-commit:
+  piped: true  # Commands run sequentially by priority; same-priority commands run in parallel
+  commands:
+    # --- Priority 1: format-fix (all packages run in parallel) ---
+    # Repeat this block for each package, substituting {pkg.name}, {pkg.dir}, {pkg.exts}, and {pkg.format_fix_cmd}:
+    format-fix-{pkg.name}:
+      priority: 1
+      root: "{pkg.dir}"
+      glob: "{pkg.dir}**/*.{pkg.exts}"
+      stage_fixed: true
+      run: {pkg.format_fix_cmd} {staged_files}  # omit {staged_files} for Rust
+
+    # --- Priority 2: lint-fix (all packages run in parallel, AFTER all format-fix completes) ---
+    # Repeat this block for each package:
+    lint-fix-{pkg.name}:
+      priority: 2
+      root: "{pkg.dir}"
+      glob: "{pkg.dir}**/*.{pkg.exts}"
+      stage_fixed: true
+      run: {pkg.lint_fix_cmd} {staged_files}  # omit {staged_files} for Rust
+
+pre-push:
+  parallel: true  # All checks run concurrently (all are read-only)
+  commands:
+    # Repeat these blocks for each package:
+    format-check-{pkg.name}:
+      root: "{pkg.dir}"
+      run: {pkg.format_check_cmd}
+    lint-check-{pkg.name}:
+      root: "{pkg.dir}"
+      run: {pkg.lint_check_cmd}
+    test-{pkg.name}:
+      root: "{pkg.dir}"
+      run: {pkg.test_cmd}
+    # Include only if coverage is configured for this package:
+    coverage-{pkg.name}:
+      root: "{pkg.dir}"
+      run: {pkg.coverage_cmd}
+```
+
+**Concrete 3-package example** (`api` in Rust, `web` in TypeScript/Bun, `worker` in Go):
+
+```yaml
+pre-commit:
+  piped: true
+  commands:
+    format-fix-api:
+      priority: 1
+      root: "api/"
+      glob: "api/**/*.rs"
+      stage_fixed: true
+      run: cargo fmt
+    format-fix-web:
+      priority: 1
+      root: "web/"
+      glob: "web/**/*.{ts,tsx}"
+      stage_fixed: true
+      run: biome format --write {staged_files}
+    format-fix-worker:
+      priority: 1
+      root: "worker/"
+      glob: "worker/**/*.go"
+      stage_fixed: true
+      run: gofmt -w {staged_files}
+    lint-fix-api:
+      priority: 2
+      root: "api/"
+      glob: "api/**/*.rs"
+      stage_fixed: true
+      run: cargo clippy --fix --allow-dirty --allow-staged
+    lint-fix-web:
+      priority: 2
+      root: "web/"
+      glob: "web/**/*.{ts,tsx}"
+      stage_fixed: true
+      run: biome lint --fix {staged_files}
+    lint-fix-worker:
+      priority: 2
+      root: "worker/"
+      glob: "worker/**/*.go"
+      stage_fixed: true
+      run: golangci-lint run --fix ./...
+
+pre-push:
+  parallel: true
+  commands:
+    format-check-api:
+      root: "api/"
+      run: cargo fmt --check
+    format-check-web:
+      root: "web/"
+      run: biome format --check .
+    format-check-worker:
+      root: "worker/"
+      run: test -z "$(gofmt -l .)"
+    lint-check-api:
+      root: "api/"
+      run: cargo clippy -- -D warnings
+    lint-check-web:
+      root: "web/"
+      run: biome lint .
+    lint-check-worker:
+      root: "worker/"
+      run: go vet ./...
+    test-api:
+      root: "api/"
+      run: cargo test
+    test-web:
+      root: "web/"
+      run: bun test
+    test-worker:
+      root: "worker/"
+      run: go test ./...
+    coverage-api:
+      root: "api/"
+      run: cargo llvm-cov --fail-under-lines 80
+```
+
+4. Run `lefthook install` to activate the hooks.
 
 #### Native hooks (language-specific)
+
+> **Multi-package projects:** Native hooks do not support structured parallel execution across packages. If the project has multiple packages with different toolchains, strongly recommend Lefthook instead. Native hooks are only suitable for single-package projects.
 
 If the user prefers native hooks instead:
 
@@ -790,10 +1067,21 @@ If the user picks **Yes**, create `README.md` using the appropriate template bel
 
 #### Full project template
 
+The `## Prerequisites` section lists each tool the developer must manually install. Use the reference table below to determine which lines to include. Omit the section entirely if no tools require manual installation.
+
 ```markdown
 # {Project Name}
 
 {One-line problem description}
+
+## Prerequisites
+
+- [{runtime name}]({runtime url}) -- {runtime role}
+- [{package manager}]({url}) -- package manager
+- [just](https://github.com/casey/just) -- command runner
+- [Lefthook](https://github.com/evilmartians/lefthook) -- git hooks manager
+- [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) -- code coverage tool
+- [golangci-lint](https://golangci-lint.run) -- Go linter
 
 ## Quick Start
 
@@ -856,10 +1144,16 @@ Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at
 
 When in ops-only mode (no runtime/language was chosen), use this shorter template. Use the directory name as the heading if no project name was set in Step 2. **Omit any section entirely if that feature was not set up** (e.g., no Git Hooks section if hooks were skipped, no CI/CD section if CI was skipped, no License section if licensing was skipped).
 
+Omit the `## Prerequisites` section entirely if no tools require manual installation (e.g., if hooks were skipped). For ops-only mode, typically only Lefthook needs to be listed.
+
 ```markdown
 # {Project Name or directory name}
 
 {One-line problem description}
+
+## Prerequisites
+
+- [Lefthook](https://github.com/evilmartians/lefthook) -- git hooks manager
 
 ## Git Hooks
 
@@ -883,6 +1177,28 @@ Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at
 ```
 
 The README should be **concise** -- no badges, no Contributing section, no boilerplate. Its purpose is to give visitors a quick orientation and prevent AI agents from later generating verbose READMEs.
+
+#### Prerequisites section reference
+
+Use this table to determine which tools belong in the Prerequisites section. Include **only tools that require manual installation** -- dev dependencies auto-installed by `bun install`, `npm install`, `cargo build`, `uv sync`, etc. do not need to be listed.
+
+| Tool | URL | Include when |
+| --- | --- | --- |
+| Bun | https://bun.sh | Runtime is TypeScript (Bun) |
+| Node.js | https://nodejs.org | Runtime is TypeScript (Node.js) |
+| pnpm | https://pnpm.io | Package manager is pnpm |
+| Yarn | https://yarnpkg.com | Package manager is yarn |
+| Python | https://python.org | Runtime is Python |
+| uv | https://github.com/astral-sh/uv | Package manager is uv |
+| Poetry | https://python-poetry.org | Package manager is poetry |
+| Rust (rustup) | https://rustup.rs | Runtime is Rust |
+| Go | https://go.dev | Runtime is Go |
+| just | https://github.com/casey/just | Task runner is just |
+| Lefthook | https://github.com/evilmartians/lefthook | Git hooks use Lefthook |
+| cargo-llvm-cov | https://github.com/taiki-e/cargo-llvm-cov | `{LLVM_COV}` is yes |
+| golangci-lint | https://golangci-lint.run | Linter is golangci-lint |
+
+**Not included:** Biome, ESLint, Prettier, Ruff, rustfmt, Clippy, golint, gofmt -- these are either bundled with the runtime toolchain or installed as dev dependencies by the package manager.
 
 ### Step 11: CLAUDE.md
 
@@ -949,8 +1265,10 @@ Use the appropriate template below based on the mode chosen in Step 1.5. Fill in
 <!-- Include this subsection only if {LLVM_COV} is yes -->
 
 ```bash
-cargo llvm-cov
+{just coverage | cargo llvm-cov}
 ```
+
+<!-- Use the task runner command if a Justfile/Makefile was set up (e.g., just coverage); otherwise use cargo llvm-cov directly. Include --fail-under-lines {COV_THRESHOLD} if a threshold is configured. -->
 
 ### Format
 
@@ -1104,4 +1422,7 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - Pre-commit hooks must only modify staged files -- use `{staged_files}` interpolation in Lefthook, `lint-staged` for TypeScript/Node.js native hooks, and file-list filtering in shell scripts; tools that only operate on the whole workspace (e.g., `cargo fmt`, `cargo clippy --fix`, `golangci-lint run --fix`) are acceptable exceptions because they have no per-file mode
 - `cargo clippy --fix` requires `--allow-dirty --allow-staged` in any git hook context -- without these flags it always fails when files are staged
 - Lefthook pre-commit fix commands **must** include `stage_fixed: true` -- without it, modifications made by the fix command stay in the working tree and are not included in the commit, making auto-fix hooks silently ineffective
+- The README Prerequisites section must list only tools that require manual installation -- do NOT list dev dependencies auto-installed by `bun install`, `npm install`, `cargo build`, `uv sync`, etc.
+- Scaffolded projects for all languages must include at least one meaningful test so `{test command}` passes and any coverage tool reports non-zero coverage from the first commit; use the greet/greeting function pattern from Step 4 as the initial test scaffold
+- For multi-package projects (monorepos or projects with multiple toolchains), use the multi-package Lefthook template with `piped: true` + `priority` for pre-commit and `parallel: true` for pre-push; package names and directories must always be derived from the user's choices -- never hardcode names like "frontend" or "backend"
 ```
