@@ -28,6 +28,8 @@ Track these variables throughout the entire workflow. Once set, use the stored v
 | `{DEFAULT_BRANCH}` | Step 0 or Step 8 | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
 | `{PROJECT_KIND}`   | Step 5.5         | Whether the project is an **Application** (binary/executable) or **Library** (reusable code). Affects which dependencies are suggested.            |
 | `{INSTALLED_DEPS}`  | Step 5.5         | List of recommended dependencies the user chose to install. Used in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).                  |
+| `{LLVM_COV}`       | Step 6.5         | Whether LLVM coverage is enabled (`yes`/`no`). Only set for Rust projects with GitHub Actions CI.                                               |
+| `{COV_THRESHOLD}`  | Step 6.5         | Minimum coverage percentage (e.g., `80`), or empty if no threshold enforced.                                                                    |
 
 ## Workflow
 
@@ -310,6 +312,118 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
 > **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
 
+### Step 6.5: LLVM Code Coverage (Rust only)
+
+> **Skip this step unless the runtime is Rust AND GitHub Actions was selected in Step 6.**
+
+Ask the user:
+
+> **Would you like to add LLVM code coverage using `cargo-llvm-cov`?**
+>
+> | Option | Description |
+> | --- | --- |
+> | **Yes, CI + hooks** (Recommended) | Add a coverage job to CI and a coverage check to the pre-push hook |
+> | **Yes, CI only** | Add a coverage job to GitHub Actions only |
+> | **Yes, hooks only** | Add a coverage check to the pre-push hook only |
+> | **No** | Skip code coverage |
+
+If the user selects any "Yes" option, set `{LLVM_COV}` to `yes`. Then ask two follow-up questions:
+
+#### Coverage threshold
+
+> **Would you like to enforce a minimum coverage threshold?**
+>
+> | Option | Description |
+> | --- | --- |
+> | **Yes** | Fail CI / block push if line coverage drops below a percentage |
+> | **No** | Report coverage without enforcing a minimum |
+
+If "Yes", ask:
+
+> **What minimum line coverage percentage? (default: 80)**
+
+Store the answer as `{COV_THRESHOLD}`. If "No", leave `{COV_THRESHOLD}` empty.
+
+#### Coverage upload (CI only, skip if hooks-only was chosen)
+
+> **Would you like to upload coverage reports from CI?**
+>
+> | Option | Description |
+> | --- | --- |
+> | **Codecov** (Recommended) | Upload to Codecov (free for open-source; requires `CODECOV_TOKEN` secret) |
+> | **Artifact only** | Upload `lcov.info` as a GitHub Actions artifact |
+> | **No** | Print coverage summary in CI logs only |
+
+#### Apply changes
+
+Based on the user's selections, make the following modifications:
+
+##### Update `rust-toolchain.toml`
+
+Edit the components list to add `llvm-tools-preview`:
+
+```toml
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy", "rust-analyzer", "llvm-tools-preview"]
+```
+
+##### Update `.github/workflows/ci.yml` (if CI coverage was selected)
+
+Add a `coverage` job to the workflow. Use `taiki-e/install-action@cargo-llvm-cov` for installation (pre-built binary -- do NOT use `cargo install cargo-llvm-cov` as it compiles from source and is slow):
+
+```yaml
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate coverage report
+        run: cargo llvm-cov --lcov --output-path lcov.info
+      # Include the following step only if {COV_THRESHOLD} is set:
+      - name: Check coverage threshold
+        run: cargo llvm-cov --fail-under-lines {COV_THRESHOLD}
+      # Include ONE of the following upload steps based on the user's choice:
+      # Codecov:
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      # Artifact only:
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: lcov.info
+```
+
+##### Add `coverage` command to task runner (if a task runner was set up in Step 5)
+
+If the project has a `Makefile`, `Justfile`, or similar task runner (set up in Step 5 alongside `format`, `lint`, and `lint:fix`), add a `coverage` recipe/target. This is what git hooks will call. **CI does NOT use the task runner** -- it runs `cargo llvm-cov` directly.
+
+Example for a `Justfile`:
+
+```just
+coverage:
+    cargo llvm-cov{{if COV_THRESHOLD}} --fail-under-lines {COV_THRESHOLD}{{endif}}
+```
+
+Example for a `Makefile`:
+
+```make
+coverage:
+	cargo llvm-cov{{if COV_THRESHOLD}} --fail-under-lines {COV_THRESHOLD}{{endif}}
+```
+
+If no task runner exists, the git hooks (Step 9) will call `cargo llvm-cov` directly.
+
 ### Step 7: Licensing
 
 Ask the user which license to use. Present the common options prominently:
@@ -469,6 +583,9 @@ pre-push:
       run: { lint check command } # e.g. biome lint, ruff check, cargo clippy -- -D warnings
     test:
       run: { test command } # e.g. bun test, pytest, cargo test, go test ./...
+    # For Rust projects: include the following only if {LLVM_COV} is yes AND hooks coverage was selected:
+    coverage:
+      run: { just coverage | cargo llvm-cov [--fail-under-lines {COV_THRESHOLD}] } # use task runner command if available, otherwise raw cargo llvm-cov
 ```
 
 3. Run `lefthook install` to activate the hooks.
@@ -496,6 +613,9 @@ If the user prefers native hooks instead:
 
 - Create `.git/hooks/pre-commit`: runs `cargo fmt` (fix) and `cargo clippy --fix`
 - Create `.git/hooks/pre-push`: runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`
+- If `{LLVM_COV}` is `yes` and hooks coverage was selected, also append a coverage step to `.git/hooks/pre-push`:
+  - If a task runner exists: call `just coverage` (or the equivalent Make target)
+  - Otherwise: call `cargo llvm-cov` directly (with `--fail-under-lines {COV_THRESHOLD}` if a threshold is set)
 - Make both scripts executable (`chmod +x`)
 
 **Go:**
@@ -555,6 +675,16 @@ This project uses {Lefthook/husky/pre-commit/native hooks}. Pre-commit hooks aut
 ## CI/CD
 
 GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRANCH}` and pull requests.
+
+## Code Coverage
+
+<!-- Include this section only if {LLVM_COV} is yes -->
+
+This project uses [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) for LLVM-based code coverage.{If COV_THRESHOLD is set: ` CI enforces a minimum of {COV_THRESHOLD}% line coverage.`}
+
+\`\`\`bash
+cargo llvm-cov
+\`\`\`
 
 ## License
 
@@ -644,6 +774,14 @@ Regardless of which option is chosen, the file content is identical -- use the t
 {test command}
 ```
 
+### Coverage
+
+<!-- Include this subsection only if {LLVM_COV} is yes -->
+
+```bash
+cargo llvm-cov
+```
+
 ### Format
 
 ```bash
@@ -692,6 +830,7 @@ Linter: {linter}
 Dependencies: {count} installed ({comma-separated names from {INSTALLED_DEPS}}, or "none" if skipped)
 License: {license(s)}
 CI/CD: {ci/cd}
+Coverage: {cargo-llvm-cov (threshold: {COV_THRESHOLD}%, upload: {Codecov/artifact/none}) | none}
 Pre-commit: {yes/no}
 
 Files created:
@@ -702,6 +841,7 @@ Next steps:
 1. {install command}
 2. Push to GitHub and verify GitHub Actions workflows run correctly
    - Configure any required secrets in Settings -> Secrets and variables -> Actions
+   - {If Codecov upload was chosen: Configure `CODECOV_TOKEN` secret in Settings -> Secrets and variables -> Actions}
 3. Start building!
 
 ```
@@ -746,4 +886,6 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - Use `WebFetch` with prompt "Return the full file content exactly as-is" to get raw template text without summarization
 - If `WebFetch` fails for any URL, fall back to generating content from memory and inform the user
 - For dual-license, fetch both license texts in parallel to minimize latency
+- When adding LLVM coverage for Rust in CI, use `taiki-e/install-action@cargo-llvm-cov` (pre-built binary) -- do NOT use `cargo install cargo-llvm-cov` as it compiles from source and is significantly slower
+- Git hooks should call the task runner coverage command (e.g., `just coverage`) when a task runner is configured; CI always uses raw `cargo llvm-cov` commands directly
 ```
