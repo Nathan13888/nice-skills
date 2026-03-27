@@ -225,12 +225,13 @@ channel = "stable"
 components = ["rustfmt", "clippy", "rust-analyzer"]
 ```
 
-- For **applications** (`cargo init`): refactor `src/main.rs` to extract a testable function so `cargo test` passes and `cargo llvm-cov` reports non-zero coverage from the first commit:
+- For **applications** (`cargo init`): refactor `src/main.rs` to extract a testable function so `cargo test` passes and `cargo llvm-cov` reports non-zero coverage from the first commit. Annotate `fn main()` with `#[coverage(off)]` so the entry-point boilerplate does not count against the threshold:
   ```rust
   fn greeting() -> &'static str {
       "Hello, world!"
   }
 
+  #[coverage(off)]
   fn main() {
       println!("{}", greeting());
   }
@@ -319,16 +320,13 @@ Ask the user which formatter and linter to use. Present options based on the cho
 After selection:
 
 1. Install the chosen tools as dev dependencies
-2. Create the appropriate config file(s) using the minimal starter configs below:
+2. Create the appropriate config file(s):
 
    **Biome (`biome.json`):**
+   Run `npx biome init` to generate the config (biome is already installed from step 1).
+   Then update the `formatter` section to use 2-space indentation:
    ```json
-   {
-     "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-     "organizeImports": { "enabled": true },
-     "linter": { "enabled": true, "rules": { "recommended": true } },
-     "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 }
-   }
+   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 }
    ```
 
    **ESLint flat config (`eslint.config.js`) with TypeScript:**
@@ -641,7 +639,7 @@ coverage:
 
 If no task runner exists, the git hooks (Step 9) will call `cargo llvm-cov` directly.
 
-> **Coverage from day one:** If a coverage threshold is set, the scaffolded `src/main.rs` from Step 4 already includes a test covering `greeting()`, which ensures `cargo llvm-cov` reports non-zero coverage on the initial scaffold. Remind the user to raise the threshold as they add more code and tests.
+> **Coverage from day one:** The scaffolded `src/main.rs` from Step 4 already includes a test covering `greeting()`, and `fn main()` is annotated with `#[coverage(off)]` so the entry-point boilerplate does not count against the threshold. This ensures `cargo llvm-cov` reports 100% coverage on the initial scaffold. Remind the user to annotate any future boilerplate entry points with `#[coverage(off)]` and raise the threshold as they add more code and tests.
 
 ### Step 7: Licensing
 
@@ -1332,14 +1330,16 @@ Licensed under either of [{License A}](LICENSE-A) or [{License B}](LICENSE-B) at
 
 ### Step 12: Summary
 
-**For new repos (git was initialized in Step 8):** Before printing the summary, create the initial commit now that all files (hooks, README, CLAUDE.md) exist:
+**For new repos (git was initialized in Step 8):** Before printing the summary, create the initial commit now that all files (hooks, README, CLAUDE.md) exist, then push if a remote is configured (so pre-push hooks are verified immediately):
 
 ```bash
 git add -A
 git commit -m "chore: initialize project"
+# Push if origin is already configured (e.g., user pre-created the remote):
+git remote get-url origin 2>/dev/null && git push -u origin {DEFAULT_BRANCH}
 ```
 
-If the user is on an existing repo and requested an initial commit (Step 8), do that now as well.
+If the user is on an existing repo and requested an initial commit (Step 8), do that now as well, then push if origin is configured.
 
 Print a summary of everything that was created. Adapt the summary to the chosen mode:
 
@@ -1419,6 +1419,7 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - For dual-license, fetch both license texts in parallel to minimize latency
 - When adding LLVM coverage for Rust in CI, use `taiki-e/install-action@cargo-llvm-cov` (pre-built binary) -- do NOT use `cargo install cargo-llvm-cov` as it compiles from source and is significantly slower
 - Git hooks should call the task runner coverage command (e.g., `just coverage`) when a task runner is configured; CI always uses raw `cargo llvm-cov` commands directly
+- Annotate entry-point boilerplate with `#[coverage(off)]` (e.g., `fn main()`) so non-logic code does not count against coverage thresholds -- apply this in scaffolded templates and instruct users to do the same for any future entry-point code
 - Pre-commit hooks must only modify staged files -- use `{staged_files}` interpolation in Lefthook, `lint-staged` for TypeScript/Node.js native hooks, and file-list filtering in shell scripts; tools that only operate on the whole workspace (e.g., `cargo fmt`, `cargo clippy --fix`, `golangci-lint run --fix`) are acceptable exceptions because they have no per-file mode
 - `cargo clippy --fix` requires `--allow-dirty --allow-staged` in any git hook context -- without these flags it always fails when files are staged
 - Lefthook pre-commit fix commands **must** include `stage_fixed: true` -- without it, modifications made by the fix command stay in the working tree and are not included in the commit, making auto-fix hooks silently ineffective
