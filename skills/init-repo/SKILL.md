@@ -552,7 +552,7 @@ Instruct the developer to install `cargo-llvm-cov` locally so hooks and task run
 cargo install cargo-llvm-cov  # or: cargo binstall cargo-llvm-cov (faster binary install)
 ```
 
-Add this as a prerequisite note in the Summary (Step 12) and CLAUDE.md setup section.
+Add this as a prerequisite note in the Summary (Step 12).
 
 > **CI uses `taiki-e/install-action@cargo-llvm-cov`** (pre-built binary). `cargo install` is only for local developer setup and should NOT be used in CI as it compiles from source and is significantly slower.
 
@@ -1223,79 +1223,34 @@ Use the appropriate template below based on the mode chosen in Step 1.5. Fill in
 
 {One-line problem description}
 
-## Tech Stack
+## Packages
 
-- **Runtime:** {runtime}
-- **Language:** {language}
-- **Package Manager:** {package manager}
-- **Formatter:** {formatter}
-- **Linter:** {linter}
-- **Key Dependencies:** {comma-separated list from {INSTALLED_DEPS}, or omit this line if none were installed}
+<!-- Omit this section if no packages were installed ({INSTALLED_DEPS} is empty). For each installed package, state its intended use in this project -- not a generic description. -->
 
-## Project Structure
+- **{dep}** -- {project-specific purpose, e.g., "structured logging for request tracing" not "a logging library"}
 
-```
-{tree of created files/dirs}
-```
+## Quality
 
-## Development
-
-### Setup
+Validate changes:
 
 ```bash
-{install command}
+{test command}           # correctness
+{format check command}   # formatting
+{lint command}           # lint
 ```
 
-### Run
-
+<!-- Append this block only if {LLVM_COV} is yes: -->
 ```bash
-{run/dev command}
+{coverage command}       # coverage (minimum {COV_THRESHOLD}%)
 ```
 
-### Test
+<!-- Use the task runner command (e.g., `just test`) when a Justfile/Makefile was set up; otherwise use the raw tool command. -->
 
-```bash
-{test command}
-```
-
-### Coverage
-
-<!-- Include this subsection only if {LLVM_COV} is yes -->
-
-```bash
-{just coverage | cargo llvm-cov}
-```
-
-<!-- Use the task runner command if a Justfile/Makefile was set up (e.g., just coverage); otherwise use cargo llvm-cov directly. Include --fail-under-lines {COV_THRESHOLD} if a threshold is configured. -->
-
-### Format
-
-```bash
-{format command}
-```
-
-### Lint
-
-```bash
-{lint command}
-```
-
-### Lint Fix
-
-```bash
-{lint fix command}
-```
-
-## Conventions
-
-- {Language-specific conventions, e.g., "Use strict TypeScript - no `any` types"}
-- Write tests for all new functionality
-- Use conventional commits (type: description)
-- Keep functions small and focused
-
-## Architecture
-
-{Brief description of intended architecture based on the problem}
+{Stack-specific code quality rules for this project. These are concrete, enforceable preferences -- not generic advice. Examples by stack:}
+{- TypeScript: "No `any` types -- use `unknown` with type guards."}
+{- Rust: "All `pub` items need doc comments. Mark fallible return types with `#[must_use]`."}
+{- Python: "Type annotations required on all function signatures."}
+{- Go: "Handle all errors explicitly -- no `_` for error returns."}
 `````
 
 #### Ops-only template
