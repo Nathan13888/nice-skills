@@ -184,9 +184,15 @@ Call `AskUserQuestion` **once** with the comprehensive form below. Populate brac
 >
 > ---
 >
-> **I. Extra .gitignore templates** *(multi-select)*
+> **I. Extra .gitignore templates** *(multi-select — these supplement the primary runtime template)*
 >
-> [ ] macOS  [ ] Linux  [ ] Windows  [ ] VSCode  [ ] JetBrains  [ ] Vim  [ ] None
+> [ ] macOS *(.DS_Store, Spotlight index, Quarantine attrs)*
+> [ ] Linux *(~backup files, .directory, .trash)*
+> [ ] Windows *(Thumbs.db, Desktop.ini, ehthumbs.db)*
+> [ ] VSCode *(.vscode/ folder, workspace settings)*
+> [ ] JetBrains *(.idea/, *.iml, shelf/)*
+> [ ] Vim *(swap, session, undo files)*
+> [ ] None of the above
 >
 > *(Ops only: also specify primary template — Node / Python / Rust / Go / None)*
 >
@@ -876,7 +882,7 @@ Use `{EXTRA_GITIGNORE}` from Phase 1 to determine which additional global ignore
 | VSCode    | `VisualStudioCode` |
 | JetBrains | `JetBrains`        |
 | Vim       | `Vim`              |
-| None      | _(skip)_           |
+| None of the above | _(skip)_    |
 
 Global URL pattern: `https://raw.githubusercontent.com/github/gitignore/b4105e73e493bb7a20b5d7ea35efd5780ca44938/Global/{Name}.gitignore`
 
