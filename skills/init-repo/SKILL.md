@@ -17,20 +17,20 @@ Scaffold a new project repository optimized for agentic development from a probl
 
 ## Quick Start
 
-When invoked, follow the workflow below sequentially. Use `AskUserQuestion` at each decision point to gather user preferences. Do NOT skip steps or assume defaults without asking.
+When invoked, follow the workflow below sequentially. After detecting the environment in Step 0, **gather all preferences in a single Phase 1 intake form** before executing any steps. This minimizes back-and-forth turns.
 
 ### State Variables
 
 Track these variables throughout the entire workflow. Once set, use the stored value -- never hardcode a branch name like `main` or `master`.
 
-| Variable           | Set in           | Description                                                                                                                                     |
-| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{DEFAULT_BRANCH}` | Step 0, 6, or 8  | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.** |
-| `{PROJECT_KIND}`   | Step 4 (Rust) or Step 5.5 | Whether the project is an **Application** (binary/executable) or **Library** (reusable code). For Rust, set in Step 4 because it determines the `cargo init` command; for all other runtimes, set in Step 5.5. |
-| `{INSTALLED_DEPS}`  | Step 5.5         | List of recommended dependencies the user chose to install. Used in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).                  |
-| `{LLVM_COV}`       | Step 6.5         | Whether LLVM coverage is enabled (`yes`/`no`). Only set for Rust projects with GitHub Actions CI.                                               |
-| `{COV_THRESHOLD}`  | Step 6.5         | Minimum coverage percentage (e.g., `80`), or empty if no threshold enforced.                                                                    |
-| `{PACKAGES}`       | Step 9           | List of packages for multi-package projects. Each entry: `{name, dir, lang, exts, format_fix_cmd, lint_fix_cmd, format_check_cmd, lint_check_cmd, test_cmd, coverage_cmd}`. Only set when the project has multiple packages with different toolchains. |
+| Variable           | Set in                        | Description                                                                                                                                                                                                                                                                                                                                               |
+| ------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{DEFAULT_BRANCH}` | Step 0 (detected) or Phase 1  | The repository's default branch name (e.g., `main`, `master`, `develop`). **Every later step that references a branch MUST use this variable.**                                                                                                                                                                                                           |
+| `{PROJECT_KIND}`   | Phase 1                       | Whether the project is an **Application** (binary/executable) or **Library** (reusable code).                                                                                                                                                                                                                                                             |
+| `{INSTALLED_DEPS}` | Step 5.5                      | List of recommended dependencies the user chose to install. Used in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).                                                                                                                                                                                                                         |
+| `{LLVM_COV}`       | Phase 1                       | Whether LLVM coverage is enabled (`yes`/`no`). Only set for Rust projects with GitHub Actions CI.                                                                                                                                                                                                                                                         |
+| `{COV_THRESHOLD}`  | Phase 1                       | Minimum coverage percentage (e.g., `80`), or empty if no threshold enforced.                                                                                                                                                                                                                                                                              |
+| `{PACKAGES}`       | Phase 1                       | List of packages for multi-package projects. Each entry: `{name, dir, lang, exts, format_fix_cmd, lint_fix_cmd, format_check_cmd, lint_check_cmd, test_cmd, coverage_cmd}`. Only set when the project has multiple packages with different toolchains.                                                                                                    |
 
 ## Workflow
 
@@ -40,54 +40,223 @@ Before anything else, check the current directory's state:
 
 1. Run `git rev-parse --is-inside-work-tree` to see if the CWD is already inside a git repository (even if it has zero commits or is otherwise empty).
 2. Run `ls -A` to check if the directory has any files/folders at all.
-3. If it IS a git repo, note this -- we will NOT run `git init` later. Run `git symbolic-ref --short HEAD` to detect the current branch name.
-4. If it is NOT a git repo, note this -- we may need to initialize one later. `{DEFAULT_BRANCH}` will be determined in Step 8.
+3. If it IS a git repo, note this -- we will NOT run `git init` later. Run `git symbolic-ref --short HEAD` to detect the current branch name. Store as `{DETECTED_BRANCH}`.
+4. If it is NOT a git repo, note this -- we may need to initialize one later. Set `{DETECTED_BRANCH}` to `main` as the suggested default.
 
-Tell the user what you detected:
+Report a brief one-line status note:
+> `Detected: [git repo on branch {DETECTED_BRANCH} / no git repo], [empty / non-empty] directory at {CWD}.`
 
-- Whether the current directory is a git repo
-- Whether it's empty or has existing files
+Then proceed directly to Phase 1. Do NOT ask any questions here.
 
-**If it IS a git repo**, also confirm the default branch with the user:
+### Phase 1: Project Intake
 
-> I detected the current branch is `{detected branch}`. **What is the default branch for this repository?** (default: `{detected branch}`)
+Call `AskUserQuestion` **once** with the comprehensive form below. Populate bracketed placeholders with values from Step 0 (e.g., `{DETECTED_BRANCH}`, `{CWD}`).
 
-Store the user's answer (or confirmed default) as `{DEFAULT_BRANCH}`. This is critical -- the value will be reused in CI/CD triggers, push commands, and other steps.
+---
 
-Then ask explicitly:
-
-> **Where do you want to set up the project?**
+> **Let's set up your project. Fill in the fields below (skip sections that don't apply).**
 >
-> 1. **Here** -- use the current directory (`{CWD}`)
-> 2. **New subdirectory** -- create a new folder inside the current directory
+> ---
+>
+> **A. Project Basics**
+>
+> **Problem description** *(what are you building? 1-2 sentences)*
+>
+> **Project name** *(lowercase, kebab-case — leave blank to generate suggestions)*
+>
+> **Location:**
+> 1. Here — use `{CWD}`
+> 2. New subdirectory — name: `___`
+>
+> **Scaffolding mode:**
+> 1. Full project — code + ops tooling
+> 2. Ops only — git, .gitignore, license, CI, hooks, README, CLAUDE.md (no runtime/code)
+>
+> ---
+>
+> **B. Runtime & Language** *(skip if Ops only)*
+>
+> Choose one:
+> 1. TypeScript (Bun) *(Recommended for TypeScript)* — fast runtime, built-in bundler/test runner
+> 2. TypeScript (Node.js) — broader ecosystem compatibility
+> 3. Python — data, ML/AI, scripting, automation
+> 4. Rust — performance-critical, systems, CLI tools
+> 5. Go — infrastructure, networking, microservices
+>
+> *TypeScript (Node.js) only:*
+> - Package manager: **pnpm** (default) / npm / yarn
+> - Test runner: **Vitest** (default) / Jest / node:test
+>
+> *Python only:*
+> - Package manager: **uv** (default) / poetry / pip
+>
+> *Rust only:*
+> - Project kind: **Application** / Library
+>
+> *Go only:*
+> - Module path *(e.g. github.com/username/project-name)*: `___`
+>
+> ---
+>
+> **C. Code Quality** *(skip if Ops only)*
+>
+> Formatter/linter:
+> - TypeScript: **Biome** (default) / ESLint+Prettier / ESLint flat config / oxlint
+> - Python: **Ruff** (default) / Black+Flake8 / Black+Ruff
+> - Rust: rustfmt+Clippy *(only option)*
+> - Go: **gofmt+go vet** (default) / gofmt+golangci-lint
+>
+> Task runner *(Rust/Go only)*: **just** (default) / Makefile / neither
+>
+> ---
+>
+> **D. Project Kind** *(skip if Rust — already answered above; skip if Ops only)*
+>
+> 1. Application — binary/executable (CLI, server, script, etc.)
+> 2. Library — reusable code consumed by other projects
+>
+> ---
+>
+> **E. Dependencies** *(multi-select — check all to install; skip if Ops only)*
+>
+> *TypeScript (Bun):*
+> [ ] zod — runtime type validation
+>
+> *TypeScript (Node.js):*
+> [ ] zod — runtime type validation
+> [ ] dotenv — .env file loading
+>
+> *Python:*
+> [ ] pydantic — data validation
+> [ ] python-dotenv — .env file loading
+> [ ] httpx — async/sync HTTP client
+>
+> *Rust (universal — all projects):*
+> [ ] tracing — structured, async-aware logging
+> [ ] thiserror — derive macro for std::error::Error
+> [ ] serde + serde_json — serialization/deserialization
+>
+> *Rust (application only):*
+> [ ] eyre + color-eyre — flexible, colorful error reporting
+> [ ] tokio (full) — async runtime
+>
+> *Go:*
+> [ ] github.com/rs/zerolog — high-performance structured logging
+>
+> ---
+>
+> **F. CI/CD**
+>
+> 1. **GitHub Actions** (Recommended)
+> 2. None
+> 3. Other — system name: `___`
+>
+> Default branch name *(pre-filled from detection: `{DETECTED_BRANCH}` — enter a different name to override)*: `___`
+>
+> ---
+>
+> **G. Coverage** *(Rust + GitHub Actions only — leave blank if not applicable)*
+>
+> Coverage setup:
+> 1. CI + pre-push hook (Recommended)
+> 2. CI only
+> 3. Hooks only
+> 4. None / N/A
+>
+> Minimum coverage threshold *(percentage, e.g. 80 — leave blank for no threshold)*: `___`
+>
+> Coverage upload *(CI only; ignored if hooks-only or none)*:
+> 1. Codecov (Recommended — free for open source; requires CODECOV_TOKEN secret)
+> 2. Artifact only
+> 3. No upload
+>
+> ---
+>
+> **H. License**
+>
+> 1. MIT *(most common open-source)*
+> 2. Apache-2.0 *(open source with patent protection)*
+> 3. GPL-3.0 *(copyleft)*
+> 4. Dual (MIT + Apache-2.0) *(Rust ecosystem standard)*
+> 5. Proprietary
+> 6. None
+> 7. Other — SPDX ID: `___` *(for custom dual license, use `SPDX-A+SPDX-B`, e.g. `MIT+GPL-3.0`)*
+>
+> ---
+>
+> **I. Extra .gitignore templates** *(multi-select)*
+>
+> [ ] macOS  [ ] Linux  [ ] Windows  [ ] VSCode  [ ] JetBrains  [ ] Vim  [ ] None
+>
+> *(Ops only: also specify primary template — Node / Python / Rust / Go / None)*
+>
+> ---
+>
+> **J. Git Hooks**
+>
+> 1. **Lefthook** (Recommended — works with any runtime)
+> 2. Native hooks *(husky for TypeScript, pre-commit framework for Python, .git/hooks for Rust/Go)*
+> 3. None
+>
+> Multi-package project?
+> 1. No — single package *(most projects)*
+> 2. Yes — list packages as `name:dir:runtime` pairs separated by commas:
+>    *(e.g. `api:api/:rust, web:web/:typescript-bun, worker:worker/:go`)*
+>    Valid runtime tokens: `typescript-bun`, `typescript-node`, `python`, `rust`, `go`
+>    Packages: `___`
+>
+> ---
+>
+> **K. Docs**
+>
+> README.md:
+> 1. Yes — concise README with overview and quick start (Recommended)
+> 2. No
+>
+> Agent context file:
+> 1. AGENTS.md + CLAUDE.md symlink (Recommended for multi-agent setups)
+> 2. CLAUDE.md only
+> 3. No
 
-If the user picks "New subdirectory", ask for the folder name, create it, and `cd` into it.
-All subsequent operations MUST happen in the chosen directory -- never in a parent or sibling directory.
+---
+
+Store all answers as state variables. Then apply these post-intake steps before proceeding to Step 1:
+
+#### Post-intake: project name
+
+If the project name was left blank, generate 2-3 kebab-case name suggestions derived from the problem description. Ask one follow-up `AskUserQuestion`:
+
+> Here are suggested project names based on your description:
+> 1. `{suggestion-1}`
+> 2. `{suggestion-2}`
+> 3. `{suggestion-3}`
+> 4. Enter my own: `___`
+
+Store the confirmed name and proceed to Step 1.
+
+#### Post-intake: multi-package parsing
+
+If multi-package was selected, parse the `name:dir:runtime` string into `{PACKAGES}`. For each entry, derive `exts`, `format_fix_cmd`, `lint_fix_cmd`, `format_check_cmd`, `lint_check_cmd`, `test_cmd`, and `coverage_cmd` from the runtime token. If any entry has an invalid format or unrecognized runtime token, report the parse error and ask one corrective follow-up before proceeding.
+
+#### Post-intake: default branch
+
+Store the confirmed (or detected) branch name as `{DEFAULT_BRANCH}`. This is used in every subsequent step that references a branch -- never re-ask.
 
 ### Step 1: Understand the Problem
 
-Read the user's problem description. If none was provided, ask:
-
-> What problem are you solving? Describe what you want to build in 1-2 sentences.
-
-Summarize back your understanding before proceeding.
+Use `{PROBLEM_DESCRIPTION}` from Phase 1. Summarize back your understanding before proceeding.
 
 ### Step 1.5: Scaffolding Mode
 
-Ask the user what level of scaffolding they want:
+Use `{SCAFFOLDING_MODE}` from Phase 1.
 
-> **What would you like to set up?**
->
-> 1. **Full project** -- scaffold code, tooling, and ops (runtime, package manager, formatter, linter, CI, license, precommits, README, CLAUDE.md)
-> 2. **Ops only** -- just set up ops tooling (git, .gitignore, license, CI, precommits, README, CLAUDE.md) without creating project code or installing a runtime/package manager
+If the user picked **Ops only**, skip Steps 2-5.5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, README, and CLAUDE.md.
 
-If the user picks **Ops only**, skip Steps 2-5.5 entirely and jump straight to Step 6 (CI/CD). The ops-only path still walks through CI, licensing, git setup, gitignore, precommits, README, and CLAUDE.md.
-
-If the user picks **Full project**, continue with Step 2.
+If the user picked **Full project**, continue with Step 2.
 
 ### Step 2: Project Name
 
-Suggest 2-3 kebab-case project names derived from the problem description. Ask the user to pick one or provide their own.
+Use `{PROJECT_NAME}` from Phase 1 (confirmed in the post-intake step if it was left blank).
 
 Naming rules:
 
@@ -97,7 +266,7 @@ Naming rules:
 
 ### Step 3: Runtime & Language
 
-Ask the user which runtime/language to use. Present options based on what fits the problem:
+Use `{RUNTIME}` from Phase 1. Proceed with the appropriate section in Step 4.
 
 | Option                   | When to suggest                                                                       |
 | ------------------------ | ------------------------------------------------------------------------------------- |
@@ -107,11 +276,9 @@ Ask the user which runtime/language to use. Present options based on what fits t
 | **Rust**                 | Performance-critical, systems, CLI tools                                              |
 | **Go**                   | Infrastructure, networking, microservices                                             |
 
-Suggest the best fit as the first option with "(Recommended)" appended.
-
 ### Step 4: Package Manager & Project Init
 
-Based on the chosen runtime, initialize the project:
+Based on `{RUNTIME}` from Phase 1, initialize the project:
 
 **TypeScript (Bun)** (Recommended for TypeScript):
 
@@ -138,10 +305,10 @@ Based on the chosen runtime, initialize the project:
 
 **TypeScript (Node.js):**
 
-- Ask: npm, yarn, or pnpm? (Recommend pnpm)
+- Use `{NODE_PKG_MANAGER}` from Phase 1 (pnpm / npm / yarn)
 - Run the appropriate init command
 - Create `tsconfig.json` with strict mode
-- Ask: Which test runner? (Recommend **Vitest** for TypeScript; alternatives: Jest, `node --test` built-in). Install as a dev dependency (e.g., `pnpm add -D vitest`)
+- Use `{NODE_TEST_RUNNER}` from Phase 1 (Vitest / Jest / `node --test`). Install as a dev dependency (e.g., `pnpm add -D vitest`)
 - Create a testable entry point and test file so `{test command}` passes immediately:
   - Entry file (e.g., `src/index.ts`):
     ```typescript
@@ -179,7 +346,7 @@ Based on the chosen runtime, initialize the project:
 
 **Python:**
 
-- Ask: uv, poetry, or pip? (Recommend uv)
+- Use `{PYTHON_PKG_MANAGER}` from Phase 1 (uv / poetry / pip)
 - Run the appropriate init command:
   - **uv**: `uv init`
   - **poetry**: `poetry new {project-name}` (or `poetry init` in an existing directory)
@@ -191,7 +358,7 @@ Based on the chosen runtime, initialize the project:
     requires-python = ">=3.12"
     dependencies = []
     ```
-- Set Python version (ask or default to 3.12+): write `requires-python = ">=3.12"` in `pyproject.toml` **and** create a `.python-version` file with the pinned version (e.g., `3.12`)
+- Set Python version (default to 3.12+): write `requires-python = ">=3.12"` in `pyproject.toml` **and** create a `.python-version` file with the pinned version (e.g., `3.12`)
 - Install `pytest` as a dev dependency: `uv add --dev pytest` / `poetry add --dev pytest` / `pip install pytest` (and add to `requirements-dev.txt`)
 - Ensure the entry point exports a testable function and create a test so `pytest` passes immediately:
   ```python
@@ -212,10 +379,7 @@ Based on the chosen runtime, initialize the project:
 
 **Rust:**
 
-- Before running `cargo init`, ask whether this is an application or library (this affects the init command and file structure). Store the answer as `{PROJECT_KIND}` and **skip this question in Step 5.5** since it was already answered:
-  > **Is this a Rust application or library?**
-  > 1. **Application** -- binary/executable (CLI, server, daemon, etc.)
-  > 2. **Library** -- reusable crate consumed by other projects
+- Use `{PROJECT_KIND}` from Phase 1 (Application or Library)
 - Run `cargo init` (for applications) or `cargo init --lib` (for libraries)
 - Create `rust-toolchain.toml` to pin the toolchain and ensure all contributors have formatting/linting/editor components:
 
@@ -250,7 +414,7 @@ components = ["rustfmt", "clippy", "rust-analyzer"]
 
 **Go:**
 
-- Ask for module path (suggest `github.com/{user}/{project}`)
+- Use `{GO_MODULE_PATH}` from Phase 1 as the module path
 - Run `go mod init`
 - Create a testable entry point and test file so `go test ./...` passes immediately:
   ```go
@@ -285,7 +449,7 @@ components = ["rustfmt", "clippy", "rust-analyzer"]
 
 ### Step 5: Code Formatting & Linting
 
-Ask the user which formatter and linter to use. Present options based on the chosen runtime. The user may select separate tools for formatting and linting, or a unified tool that handles both.
+Use `{FORMATTER_LINTER}` from Phase 1. The user may have selected separate tools for formatting and linting, or a unified tool that handles both.
 
 **TypeScript / JavaScript:**
 
@@ -360,50 +524,31 @@ After selection:
 3. Add `format`, `lint`, and `lint:fix` scripts to the project's task runner:
    - **TypeScript (Bun/Node.js):** `package.json` scripts
    - **Python:** `Makefile` targets (or `pyproject.toml` scripts if using `uv run`)
-   - **Rust:** `Justfile` (recommended -- ask if `just` is available, otherwise fall back to `Makefile`)
-   - **Go:** `Makefile` (idiomatic; offer `Justfile` as an alternative if the user prefers it)
+   - **Rust:** Use `{TASK_RUNNER}` from Phase 1 (`just` or `Makefile`)
+   - **Go:** Use `{TASK_RUNNER}` from Phase 1 (`just` or `Makefile` — `Makefile` is idiomatic for Go)
 
 ### Step 5.5: Recommended Dependencies
 
-Suggest foundational, best-practice dependencies for the chosen language. All suggestions are opt-in -- the user picks which ones to install. This step focuses on universal/foundational packages, NOT framework-specific choices (web frameworks, CLI parsers, etc.).
+Use `{PROJECT_KIND}` from Phase 1. Use `{SELECTED_DEPS}` from Phase 1 as the list of dependencies to install. This step focuses on universal/foundational packages, NOT framework-specific choices.
 
-#### 1. Determine Project Kind
+#### Conditional logic
 
-> **Skip this question if `{PROJECT_KIND}` was already set in Step 4** (this happens for Rust projects, where the question is asked earlier because it affects `cargo init`).
+For Rust: if `tracing` is in `{SELECTED_DEPS}` and `{PROJECT_KIND}` is **Application**, automatically add `tracing-subscriber` to the install list if not already selected -- inform the user: "Adding `tracing-subscriber` since `tracing` needs a subscriber configured in the application to produce output."
 
-Otherwise, ask with `AskUserQuestion`:
+For **Library** projects, `eyre`/`color-eyre` and `tracing-subscriber` should not be in `{SELECTED_DEPS}` -- these were not shown in the intake form for libraries. If they appear, skip them.
 
-> **Is this an application or a library?**
->
-> 1. **Application** -- binary/executable (CLI, server, script, etc.)
-> 2. **Library** -- reusable code consumed by other projects
-
-Store the answer as `{PROJECT_KIND}`.
-
-#### 2. Present Dependency Recommendations
-
-Based on the chosen language (Step 3) and `{PROJECT_KIND}`, present dependencies using `AskUserQuestion` with a multi-select prompt. Show **Universal** deps (recommended for all projects) and, for applications, **Application-only** deps. For libraries, do NOT show application-only deps.
-
-> **Here are recommended foundational dependencies for {language}.** Select the ones you want to install (or select none to skip):
-
-Only show the table for the language chosen in Step 3.
-
----
+#### Dependency reference tables
 
 **Rust:**
 
-| Dependency                              | Category         | Description                                     |
-| --------------------------------------- | ---------------- | ----------------------------------------------- |
-| `tracing`                               | Universal        | Structured, async-aware diagnostic logging       |
-| `thiserror`                             | Universal        | Derive macro for `std::error::Error`             |
-| `serde` (derive feature) + `serde_json` | Universal        | Serialization/deserialization framework           |
-| `eyre` + `color-eyre`                   | Application only | Flexible, colorful error reporting for apps      |
-| `tracing-subscriber`                    | Application only | Configures `tracing` output for apps             |
-| `tokio` (full feature)                  | Application only | Async runtime                                    |
-
-Conditional logic:
-- If `tracing` is selected and `{PROJECT_KIND}` is **Application**, automatically include `tracing-subscriber` -- inform the user: "Adding `tracing-subscriber` since `tracing` needs a subscriber configured in the application to produce output."
-- For **Library** projects, do NOT suggest `eyre`/`color-eyre` or `tracing-subscriber`. Libraries should not configure the tracing subscriber or choose an error reporter -- that is the consuming application's responsibility.
+| Dependency                              | Category         | Description                                      |
+| --------------------------------------- | ---------------- | ------------------------------------------------ |
+| `tracing`                               | Universal        | Structured, async-aware diagnostic logging        |
+| `thiserror`                             | Universal        | Derive macro for `std::error::Error`              |
+| `serde` (derive feature) + `serde_json` | Universal        | Serialization/deserialization framework            |
+| `eyre` + `color-eyre`                   | Application only | Flexible, colorful error reporting for apps       |
+| `tracing-subscriber`                    | Application only | Configures `tracing` output for apps              |
+| `tokio` (full feature)                  | Application only | Async runtime                                     |
 
 Install commands:
 - `cargo add tracing`
@@ -425,7 +570,7 @@ Install commands:
 > **Note:** For **Bun** projects, skip `dotenv` -- Bun automatically loads `.env` files at startup via `Bun.env`. `dotenv` is only needed for Node.js.
 
 Install (Bun): `bun add {package}`
-Install (Node.js): `{npm install|yarn add|pnpm add} {package}` (use the package manager chosen in Step 4)
+Install (Node.js): `{npm install|yarn add|pnpm add} {package}` (use `{NODE_PKG_MANAGER}` from Phase 1)
 
 ---
 
@@ -448,17 +593,17 @@ Install:
 
 Go's standard library covers most foundational needs. Only suggest external dependencies when they provide substantial value over stdlib.
 
-| Dependency                 | Category  | Description                          |
-| -------------------------- | --------- | ------------------------------------ |
-| `github.com/rs/zerolog`    | Universal | High-performance structured logging  |
+| Dependency              | Category  | Description                         |
+| ----------------------- | --------- | ----------------------------------- |
+| `github.com/rs/zerolog` | Universal | High-performance structured logging |
 
 Install: `go get {module_path}`
 
 ---
 
-#### 3. Install Selected Dependencies
+#### Install selected dependencies
 
-For each dependency the user selected:
+For each dependency in `{SELECTED_DEPS}`:
 
 1. Run the appropriate install command (see tables above)
 2. If a command fails, report the error and continue with the remaining dependencies -- do not abort the entire step
@@ -477,15 +622,13 @@ Store the list of successfully installed dependencies as `{INSTALLED_DEPS}` for 
 
 ### Step 6: CI/CD
 
-Ask the user what CI/CD they want. Options:
+Use `{CI_CD}` from Phase 1.
 
 | Option                           | Description               |
 | -------------------------------- | ------------------------- |
 | **GitHub Actions** (Recommended) | Standard for GitHub repos |
 | **None**                         | Skip CI/CD for now        |
-| **Other**                        | Let user specify (ask for the CI system name, then ask for their configuration format and help create a config file, or skip and add a `# TODO: add CI` comment) |
-
-> **Before writing the workflow file:** If `{DEFAULT_BRANCH}` has not been set yet (i.e., no git repo existed at Step 0 and Step 8 has not run yet), ask the user for the default branch name now and store it as `{DEFAULT_BRANCH}`. Do NOT write the CI file with a placeholder -- the branch name must be concrete.
+| **Other**                        | Use the name provided in Phase 1; help create a config file for that CI system, or skip and add a `# TODO: add CI` comment |
 
 > **Ops-only mode:** If Steps 2-5.5 were skipped, there is no formatter, linter, or test runner configured. In this case, either skip CI entirely or create a minimal stub workflow with only `actions/checkout@v4` and a `# TODO: add format, lint, and test steps once tooling is set up` comment. Inform the user that CI steps should be filled in after tooling is chosen.
 
@@ -494,7 +637,7 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 - Format check step (e.g., `biome check`, `ruff format --check`, `cargo fmt --check`)
 - Lint step (using the linter chosen in Step 5)
 - Test step (appropriate test runner for the chosen runtime) -- omit this step if no test framework has been installed
-- Triggered on push to `{DEFAULT_BRANCH}` and pull requests (**use the exact branch name stored earlier -- do NOT hardcode `main`**)
+- Triggered on push to `{DEFAULT_BRANCH}` and pull requests (**use the exact branch name stored in `{DEFAULT_BRANCH}` -- do NOT hardcode `main`**)
 
 > **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
 
@@ -502,47 +645,22 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
 > **Skip this step unless the runtime is Rust AND GitHub Actions was selected in Step 6.**
 
-Ask the user:
+Use `{LLVM_COV_MODE}` from Phase 1. If any "Yes" option was selected, set `{LLVM_COV}` to `yes`.
 
-> **Would you like to add LLVM code coverage using `cargo-llvm-cov`?**
->
-> | Option | Description |
-> | --- | --- |
-> | **Yes, CI + hooks** (Recommended) | Add a coverage job to CI and a coverage check to the pre-push hook |
-> | **Yes, CI only** | Add a coverage job to GitHub Actions only |
-> | **Yes, hooks only** | Add a coverage check to the pre-push hook only |
-> | **No** | Skip code coverage |
+| Option | Description |
+| --- | --- |
+| **Yes, CI + hooks** (Recommended) | Add a coverage job to CI and a coverage check to the pre-push hook |
+| **Yes, CI only** | Add a coverage job to GitHub Actions only |
+| **Yes, hooks only** | Add a coverage check to the pre-push hook only |
+| **No** | Skip code coverage |
 
-If the user selects any "Yes" option, set `{LLVM_COV}` to `yes`. Then ask two follow-up questions:
+Use `{COV_THRESHOLD}` from Phase 1 (the minimum line coverage percentage, or empty for no threshold).
 
-#### Coverage threshold
-
-> **Would you like to enforce a minimum coverage threshold?**
->
-> | Option | Description |
-> | --- | --- |
-> | **Yes** | Fail CI / block push if line coverage drops below a percentage |
-> | **No** | Report coverage without enforcing a minimum |
-
-If "Yes", ask:
-
-> **What minimum line coverage percentage? (default: 80)**
-
-Store the answer as `{COV_THRESHOLD}`. If "No", leave `{COV_THRESHOLD}` empty.
-
-#### Coverage upload (CI only, skip if hooks-only was chosen)
-
-> **Would you like to upload coverage reports from CI?**
->
-> | Option | Description |
-> | --- | --- |
-> | **Codecov** (Recommended) | Upload to Codecov (free for open-source; requires `CODECOV_TOKEN` secret) |
-> | **Artifact only** | Upload `lcov.info` as a GitHub Actions artifact |
-> | **No** | Print coverage summary in CI logs only |
+Use `{COV_UPLOAD}` from Phase 1 for coverage upload preference (Codecov / Artifact only / No upload).
 
 #### Apply changes
 
-Based on the user's selections, make the following modifications:
+Based on `{LLVM_COV_MODE}`, `{COV_THRESHOLD}`, and `{COV_UPLOAD}`, make the following modifications:
 
 ##### Install `cargo-llvm-cov` locally
 
@@ -586,7 +704,7 @@ Add a `coverage` job to the workflow. Use `taiki-e/install-action@cargo-llvm-cov
       # If NO threshold is set, omit --fail-under-lines:
       # - name: Generate coverage report
       #   run: cargo llvm-cov --lcov --output-path lcov.info
-      # Include ONE of the following upload steps based on the user's choice:
+      # Include ONE of the following upload steps based on {COV_UPLOAD}:
       # Codecov:
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
@@ -643,7 +761,9 @@ If no task runner exists, the git hooks (Step 9) will call `cargo llvm-cov` dire
 
 ### Step 7: Licensing
 
-Ask the user which license to use. Present the common options prominently:
+Use `{LICENSE}` from Phase 1. If the user selected **Other** and specified a license SPDX ID, use that ID. If the ID contains a `+` separator (e.g., `MIT+GPL-3.0`), treat it as a custom dual-license.
+
+> **CC license warning:** If `{LICENSE}` is a CC license (`CC-BY-*`, `CC-BY-SA-*`), warn the user: "CC licenses are designed for creative works, not software. Creative Commons explicitly recommends against using CC licenses for software." Then ask one follow-up `AskUserQuestion`: "Confirm to proceed with `{LICENSE}`, or switch to: 1. MIT  2. Apache-2.0  3. Proceed anyway." This is the only license-related follow-up permitted.
 
 | Option           | SPDX ID       | Category   | When to suggest                                      |
 | ---------------- | ------------- | ---------- | ---------------------------------------------------- |
@@ -699,9 +819,9 @@ After reading, replace placeholder fields with actual values:
 
 #### Dual License
 
-When the user selects **Dual License**:
+When `{LICENSE}` is a dual-license selection:
 
-1. Ask which two licenses to combine (recommend **MIT + Apache-2.0**, the Rust ecosystem standard)
+1. Identify the two licenses (pre-filled `MIT + Apache-2.0`, or the custom `+`-separated IDs from Phase 1)
 2. Fetch both license texts in parallel via `WebFetch`
 3. Replace placeholders in both
 4. Create `LICENSE-MIT` and `LICENSE-APACHE` (pattern: `LICENSE-{SHORT-NAME}`). Use these short names for common licenses: MIT → `MIT`, Apache-2.0 → `APACHE`, GPL-3.0 → `GPL3`, GPL-2.0 → `GPL2`, LGPL-2.1 → `LGPL`, MPL-2.0 → `MPL2`. For unlisted licenses, use a short uppercase identifier derived from the SPDX ID.
@@ -714,7 +834,7 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If no repo was detected in Step 0:**
 
-1. If `{DEFAULT_BRANCH}` was already set in Step 6, use that value — do NOT re-ask. Otherwise, ask the user what the default branch name should be (suggest `main` as the default, but accept any name such as `master`, `develop`, `trunk`, etc.) and store as `{DEFAULT_BRANCH}`.
+1. Use `{DEFAULT_BRANCH}` from Phase 1 -- do NOT re-ask.
 2. Run `git init -b {DEFAULT_BRANCH}` to initialize with that branch name.
 3. Create `.gitignore` (see below)
 
@@ -722,8 +842,8 @@ Use the git repo status detected in **Step 0** -- do NOT re-run the check.
 
 **If a repo already exists (detected in Step 0):**
 
-1. Ask the user if they want a `.gitignore` created or updated (if updating, append new content below a `# === Added by init-repo ===` header rather than overwriting)
-2. If in **Ops only** mode and no runtime was chosen, ask the user which `.gitignore` template(s) to use (or offer to skip)
+1. Append new `.gitignore` content below a `# === Added by init-repo ===` header rather than overwriting any existing `.gitignore`
+2. If in **Ops only** mode, use `{OPS_GITIGNORE_TEMPLATE}` from Phase 1 as the primary template (Node / Python / Rust / Go / None)
 
 #### Fetching `.gitignore` Templates
 
@@ -744,7 +864,7 @@ Fetch the primary `.gitignore` template for the chosen runtime using `WebFetch`:
 > ```
 > (Bun v1.2+ uses `bun.lock` text format by default; older versions use binary `bun.lockb`. Include both to handle either.)
 
-After fetching the primary template, ask the user if they want additional global ignores appended:
+Use `{EXTRA_GITIGNORE}` from Phase 1 to determine which additional global ignores to append:
 
 | Option    | Template Name      |
 | --------- | ------------------ |
@@ -772,7 +892,7 @@ Combine templates into a single `.gitignore` with section headers:
 
 > **Ops-only mode:** If Steps 2-5.5 were skipped (no formatter, linter, or test runner configured), inform the user that hooks requiring those tools cannot be set up yet. Offer to either skip hooks entirely, or create a minimal commit-msg hook that checks for conventional commit format. Do NOT create hooks that reference format/lint/test commands that do not exist.
 
-Ask the user if they want git hooks to enforce code quality. Options:
+Use `{GIT_HOOKS}` from Phase 1. Use `{IS_MULTI_PACKAGE}` and `{PACKAGES}` from Phase 1.
 
 | Option                               | Description                                                       |
 | ------------------------------------ | ----------------------------------------------------------------- |
@@ -798,19 +918,7 @@ Lefthook is a fast, language-agnostic git hooks manager that works for any runti
    - Rust/Go/Python single-package projects (no npm): `brew install lefthook` (macOS/Linux via Homebrew) or download a binary release from GitHub
    - Go projects (alternative): `go install github.com/evilmartians/lefthook@latest`
    - **Multi-package / mixed-runtime projects:** Use `brew install lefthook` or the binary release regardless of which runtimes are present -- do NOT use a package manager install (e.g., `npm install`) as it would only be available within one package's scope
-2. Determine how many packages this project has. If the project is a **monorepo** or has **multiple packages with different toolchains** (e.g., a `server/` in Go and a `web/` in TypeScript, or an `api/` in Rust, `dashboard/` in TypeScript, and `worker/` in Python), ask the user:
-
-   > **Does this project have multiple packages with different toolchains?**
-   >
-   > 1. **No — single package** (most projects)
-   > 2. **Yes — multiple packages** (monorepo or multi-language project)
-
-   If "Yes", ask for each package:
-   - **Name** (used in hook command names, e.g., `api`, `web`, `worker`) -- suggest names based on the project description
-   - **Directory path** relative to the project root (e.g., `packages/api/`, `apps/web/`)
-   - **Language/runtime** (determines format/lint/test commands)
-
-   Store as `{PACKAGES}` list. The number of packages is determined by the user -- there is no limit.
+2. Use `{IS_MULTI_PACKAGE}` from Phase 1. If multi-package, use `{PACKAGES}` (parsed in the post-intake step) to get the list of packages with their names, directories, and runtimes.
 
    Use the **single-package template** when `{PACKAGES}` has one entry; use the **multi-package template** when it has two or more.
 
@@ -989,7 +1097,7 @@ pre-push:
 
 > **Multi-package projects:** Native hooks do not support structured parallel execution across packages. If the project has multiple packages with different toolchains, strongly recommend Lefthook instead. Native hooks are only suitable for single-package projects.
 
-If the user prefers native hooks instead:
+If `{GIT_HOOKS}` is native hooks:
 
 **TypeScript (Bun/Node.js):**
 
@@ -1054,14 +1162,11 @@ If the user prefers native hooks instead:
 
 ### Step 10: README.md
 
-First, check if a `README.md` already exists in the project directory. If it does, ask the user whether to overwrite or skip. Otherwise, ask:
+Use `{WANTS_README}` from Phase 1.
 
-> **Would you like a README.md for the project?**
->
-> 1. **Yes** (Recommended) -- concise README with project overview and quick start
-> 2. **No** -- skip README creation
+First, check if a `README.md` already exists in the project directory. If it does, ask the user whether to overwrite or skip before proceeding.
 
-If the user picks **Yes**, create `README.md` using the appropriate template below. Fill in all placeholders with the values collected in earlier steps. **Omit any section entirely if that feature was not set up** (e.g., no Git Hooks section if the user skipped Step 9).
+If `{WANTS_README}` is **Yes**, create `README.md` using the appropriate template below. Fill in all placeholders with the values collected in earlier steps. **Omit any section entirely if that feature was not set up** (e.g., no Git Hooks section if the user skipped Step 9).
 
 #### Full project template
 
@@ -1200,15 +1305,9 @@ Use this table to determine which tools belong in the Prerequisites section. Inc
 
 ### Step 11: CLAUDE.md
 
-Ask the user if they want an agent context file created for the project. Options:
+Use `{CLAUDE_MD_FORMAT}` from Phase 1 (`AGENTS.md + symlink`, `CLAUDE.md only`, or `No`).
 
-| Option                                           | Description                                                                                                             |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **Yes, as `CLAUDE.md`**                          | Gives Claude context about the project for agentic development                                                          |
-| **Yes, as `AGENTS.md` + symlink ** (recommended) | Creates `AGENTS.md` as the canonical file and symlinks `CLAUDE.md -> AGENTS.md` (preferred for multi-agent/tool setups) |
-| **No**                                           | Skip                                                                                                                    |
-
-If the user picks **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and then run:
+If `{CLAUDE_MD_FORMAT}` is **`AGENTS.md` + symlink**, create the file as `AGENTS.md` and then run:
 
 ```bash
 ln -s AGENTS.md CLAUDE.md
@@ -1359,10 +1458,11 @@ If the project was created in the current directory, do NOT include a `cd` step 
 
 ## Guidelines
 
-- Always ask before creating files -- never assume preferences
-- Use `AskUserQuestion` with concrete options, not open-ended prompts
+- Gather all preferences in Phase 1 before creating any files. Do not assume defaults -- if the user's Phase 1 response is ambiguous or missing a required field, ask one clarifying follow-up before proceeding.
+- Use `AskUserQuestion` with concrete options, not open-ended prompts. Outside of Phase 1, `AskUserQuestion` is permitted only for: (1) project name suggestions if left blank, (2) CC license warning confirmation, (3) multi-package input correction, and (4) overwrite confirmation if a README already exists.
+- Phase 1 must be completed in a single `AskUserQuestion` call. Do not split it across multiple calls.
 - If a tool is not installed (e.g., `bun`, `uv`), offer to install it or suggest an alternative
-- **All files MUST be created in the chosen project directory (CWD or the user's subdirectory choice from Step 0) -- never in a parent, sibling, or unrelated directory**
+- **All files MUST be created in the chosen project directory (CWD or the user's subdirectory choice from Phase 1) -- never in a parent, sibling, or unrelated directory**
 - Check if the target directory already exists before creating anything
 - Keep the initial project minimal -- don't over-scaffold
 - Respect the user's choice to skip code scaffolding -- ops-only mode is a first-class path, not a fallback
@@ -1381,4 +1481,3 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - The README Prerequisites section must list only tools that require manual installation -- do NOT list dev dependencies auto-installed by `bun install`, `npm install`, `cargo build`, `uv sync`, etc.
 - Scaffolded projects for all languages must include at least one meaningful test so `{test command}` passes and any coverage tool reports non-zero coverage from the first commit; use the greet/greeting function pattern from Step 4 as the initial test scaffold
 - For multi-package projects (monorepos or projects with multiple toolchains), use the multi-package Lefthook template with `piped: true` + `priority` for pre-commit and `parallel: true` for pre-push; package names and directories must always be derived from the user's choices -- never hardcode names like "frontend" or "backend"
-```
