@@ -166,8 +166,8 @@ Call `AskUserQuestion` **once** with the comprehensive form below. Populate brac
 > Minimum coverage threshold *(percentage, e.g. 80 — leave blank for no threshold)*: `___`
 >
 > Coverage upload *(CI only; ignored if hooks-only or none)*:
-> 1. Codecov (Recommended — free for open source; requires CODECOV_TOKEN secret)
-> 2. Artifact only
+> 1. Artifact only (Recommended — works for all repos; uploads report as CI artifact with inline summary)
+> 2. Codecov *(open source only — requires CODECOV_TOKEN secret)*
 > 3. No upload
 >
 > ---
@@ -705,20 +705,22 @@ Add a `coverage` job to the workflow. Use `taiki-e/install-action@cargo-llvm-cov
       # - name: Generate coverage report
       #   run: cargo llvm-cov --lcov --output-path lcov.info
       # Include ONE of the following upload steps based on {COV_UPLOAD}:
-      # Codecov:
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: lcov.info
-          fail_ci_if_error: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      # Artifact only:
+      # Artifact only (default — works for all repos):
+      - name: Generate coverage summary
+        run: cargo llvm-cov report --summary-only
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: lcov.info
+      # Codecov (open source only — requires CODECOV_TOKEN secret):
+      # - name: Upload to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: lcov.info
+      #     fail_ci_if_error: true
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
 
 ##### Add `coverage` command to task runner (if a task runner was set up in Step 5)
@@ -1410,7 +1412,7 @@ Linter: {linter}
 Dependencies: {count} installed ({comma-separated names from {INSTALLED_DEPS}}, or "none" if skipped)
 License: {license(s)}
 CI/CD: {ci/cd}
-Coverage: {cargo-llvm-cov (threshold: {COV_THRESHOLD}%, upload: {Codecov/artifact/none}) | none}
+Coverage: {cargo-llvm-cov (threshold: {COV_THRESHOLD}%, upload: {artifact/Codecov/none}) | none}
 Pre-commit: {yes/no}
 
 Files created:
@@ -1421,7 +1423,7 @@ Next steps:
 1. {install command}
 2. Push to GitHub and verify GitHub Actions workflows run correctly
    - Configure any required secrets in Settings -> Secrets and variables -> Actions
-   - {If Codecov upload was chosen: Configure `CODECOV_TOKEN` secret in Settings -> Secrets and variables -> Actions}
+   - {If Codecov upload was chosen: Configure `CODECOV_TOKEN` secret in Settings -> Secrets and variables -> Actions (note: Codecov is free for open-source repos only)}
 3. Start building!
 
 ```
