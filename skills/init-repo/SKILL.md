@@ -808,31 +808,36 @@ Use `{LICENSE}` from Phase 1. If the user selected **Other** and specified a lic
 
 #### Fetching License Text
 
-Fetch the license text using `WebFetch` from this skill's vendored license templates:
+> **Download the license file directly -- never type, paraphrase, or regurgitate license text.** Reproducing license text from memory (or rewriting it after reading it into context) introduces subtle errors that break GitHub's license detection. Always `curl` the vendored template straight to disk, then edit only the placeholder lines in place.
 
+Download the license template from this skill's vendored copies with `curl`:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/Nathan13888/nice-skills/master/data/licenses/{SPDX-ID}" -o LICENSE
 ```
-https://raw.githubusercontent.com/Nathan13888/nice-skills/master/data/licenses/{SPDX-ID}
-```
 
-After reading, replace placeholder fields with actual values:
+Then replace placeholder fields **in place using the `Edit` tool** -- do NOT rewrite the file with `Write`. Only the placeholder lines may change; every other byte must stay byte-identical to the downloaded template:
 
-- `<year>` or `[year]` -> current year
-- `<copyright holders>` or `[fullname]` -> user's name from `git config user.name` (ask if not set)
+- `<year>` / `[year]` / `[yyyy]` -> current year
+- `<copyright holders>` / `<copyright holder>` / `<owner>` / `[fullname]` / `[name of copyright owner]` -> user's name from `git config user.name` (ask if not set)
+
+If a template has no placeholders (e.g. `Unlicense`, `0BSD`, `WTFPL`), leave it exactly as downloaded.
+
+If the `curl` download fails, do NOT generate the license from memory -- report the failure to the user and stop, since a hand-written license is unreliable.
 
 #### Single License
 
-1. Fetch the license text from the URL above
-2. Replace placeholders
-3. Write to `LICENSE`
+1. `curl` the template directly to `LICENSE` (see above)
+2. Use `Edit` to replace the placeholder lines in place
 
 #### Dual License
 
 When `{LICENSE}` is a dual-license selection:
 
 1. Identify the two licenses (pre-filled `MIT + Apache-2.0`, or the custom `+`-separated IDs from Phase 1)
-2. Fetch both license texts in parallel via `WebFetch`
-3. Replace placeholders in both
-4. Create `LICENSE-MIT` and `LICENSE-APACHE` (pattern: `LICENSE-{SHORT-NAME}`). Use these short names for common licenses: MIT → `MIT`, Apache-2.0 → `APACHE`, GPL-3.0 → `GPL3`, GPL-2.0 → `GPL2`, LGPL-2.1 → `LGPL`, MPL-2.0 → `MPL2`. For unlisted licenses, use a short uppercase identifier derived from the SPDX ID.
+2. Determine each target filename `LICENSE-{SHORT-NAME}` (e.g. `LICENSE-MIT`, `LICENSE-APACHE`). Use these short names for common licenses: MIT → `MIT`, Apache-2.0 → `APACHE`, GPL-3.0 → `GPL3`, GPL-2.0 → `GPL2`, LGPL-2.1 → `LGPL`, MPL-2.0 → `MPL2`. For unlisted licenses, use a short uppercase identifier derived from the SPDX ID.
+3. `curl` each template directly to its target file -- run both downloads in parallel
+4. Use `Edit` to replace the placeholder lines in each file in place
 
 > **Do NOT create a root `LICENSE` or `LICENSE.md` file for dual-licensed projects.** GitHub's license detection cannot parse explanatory text and will show incorrect or confusing license information. The dual-license explanation belongs in the README's License section instead.
 
@@ -1477,9 +1482,10 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - The CLAUDE.md should be practical and specific, not boilerplate
 - Detect git user.name and user.email from git config for license attribution
 - If the user provides a GitHub username, use it for module paths and license
-- Use `WebFetch` with prompt "Return the full file content exactly as-is" to get raw template text without summarization
-- If `WebFetch` fails for any URL, fall back to generating content from memory and inform the user
-- For dual-license, fetch both license texts in parallel to minimize latency
+- For gitignore templates, use `WebFetch` with prompt "Return the full file content exactly as-is" to get raw template text without summarization
+- If `WebFetch` fails for a gitignore URL, fall back to generating content from memory and inform the user
+- License files are an exception: always `curl` them directly to disk (never `WebFetch` + `Write`, never write from memory) and edit only placeholders in place -- regurgitated license text breaks GitHub's license detection
+- For dual-license, `curl` both license templates in parallel to minimize latency
 - When adding LLVM coverage for Rust in CI, use `taiki-e/install-action@cargo-llvm-cov` (pre-built binary) -- do NOT use `cargo install cargo-llvm-cov` as it compiles from source and is significantly slower
 - Git hooks should call the task runner coverage command (e.g., `just coverage`) when a task runner is configured; CI always uses raw `cargo llvm-cov` commands directly
 - Annotate entry-point boilerplate with `#[coverage(off)]` (e.g., `fn main()`) so non-logic code does not count against coverage thresholds -- apply this in scaffolded templates and instruct users to do the same for any future entry-point code
