@@ -731,18 +731,18 @@ Add a `coverage` job to the workflow. Use `taiki-e/install-action@cargo-llvm-cov
 
 ##### Add `coverage` command to task runner (if a task runner was set up in Step 5)
 
-If the project has a `Makefile`, `Justfile`, or similar task runner (set up in Step 5 alongside `format`, `lint`, and `lint:fix`), add a `coverage` recipe/target. This is what git hooks will call. **CI does NOT use the task runner** -- it runs `cargo llvm-cov` directly.
+If the project has a `Makefile`, `justfile`, or similar task runner (set up in Step 5 alongside `format`, `lint`, and `lint:fix`), add a `coverage` recipe/target. This is what git hooks will call. **CI does NOT use the task runner** -- it runs `cargo llvm-cov` directly.
 
 If `{COV_THRESHOLD}` is set, include `--fail-under-lines {COV_THRESHOLD}`. If not, omit it.
 
-Example for a `Justfile` (with threshold):
+Example for a `justfile` (with threshold):
 
 ```just
 coverage:
     cargo llvm-cov --fail-under-lines {COV_THRESHOLD}
 ```
 
-Example for a `Justfile` (no threshold):
+Example for a `justfile` (no threshold):
 
 ```just
 coverage:
@@ -1351,7 +1351,7 @@ Validate changes:
 {coverage command}       # coverage (minimum {COV_THRESHOLD}%)
 ```
 
-<!-- Use the task runner command (e.g., `just test`) when a Justfile/Makefile was set up; otherwise use the raw tool command. -->
+<!-- Use the task runner command (e.g., `just test`) when a justfile/Makefile was set up; otherwise use the raw tool command. -->
 
 {Stack-specific code quality rules for this project. These are concrete, enforceable preferences -- not generic advice. Examples by stack:}
 {- TypeScript: "No `any` types -- use `unknown` with type guards."}
@@ -1489,3 +1489,4 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - The README Prerequisites section must list only tools that require manual installation -- do NOT list dev dependencies auto-installed by `bun install`, `npm install`, `cargo build`, `uv sync`, etc.
 - Scaffolded projects for all languages must include at least one meaningful test so `{test command}` passes and any coverage tool reports non-zero coverage from the first commit; use the greet/greeting function pattern from Step 4 as the initial test scaffold
 - For multi-package projects (monorepos or projects with multiple toolchains), use the multi-package Lefthook template with `piped: true` + `priority` for pre-commit and `parallel: true` for pre-push; package names and directories must always be derived from the user's choices -- never hardcode names like "frontend" or "backend"
+- Always name the `just` recipe file `justfile` (all lowercase) — never `Justfile` or `JUSTFILE`
