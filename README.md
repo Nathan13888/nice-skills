@@ -11,6 +11,7 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 - `/explore`: Strategic discovery of a project's capabilities -- catalogs existing features and identifies improvements and expansion opportunities.
 - `/reflect`: Ask the agent to think about what it has done and if it's done a good job itself.
 - `/wtf`: Quick situational awareness for the current git branch -- what is this branch about, or what's been happening on trunk.
+- `/feature-branch`: Create a new git branch off trunk using the project's existing naming convention, slugifying a free-text feature description.
 - `/doc-n-fix`: Process PR review feedback into a prioritized checklist, then fix issues one by one with progress tracking.
 - `/send-it`: Push feature branch and create a GitHub PR with structured title and description.
 - `/combine-docs`: Consolidate non-code based documentation in the repository, removing redundancy and contradictions.
@@ -34,6 +35,7 @@ npx skills add https://github.com/Nathan13888/nice-skills --skill check
 npx skills add https://github.com/Nathan13888/nice-skills --skill explore
 npx skills add https://github.com/Nathan13888/nice-skills --skill reflect
 npx skills add https://github.com/Nathan13888/nice-skills --skill wtf
+npx skills add https://github.com/Nathan13888/nice-skills --skill feature-branch
 npx skills add https://github.com/Nathan13888/nice-skills --skill doc-n-fix
 npx skills add https://github.com/Nathan13888/nice-skills --skill send-it
 npx skills add https://github.com/Nathan13888/nice-skills --skill combine-docs
