@@ -13,6 +13,7 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 - `/wtf`: Quick situational awareness for the current git branch -- what is this branch about, or what's been happening on trunk.
 - `/feature-branch`: Create a new git branch off trunk using the project's existing naming convention, slugifying a free-text feature description.
 - `/doc-n-fix`: Process PR review feedback into a prioritized checklist, then fix issues one by one with progress tracking.
+- `/issue`: Capture a problem or change request, verify it lightly against the codebase, draft a structured report, then upload, document, or hand off for a fix.
 - `/send-it`: Push feature branch and create a GitHub PR with structured title and description.
 - `/combine-docs`: Consolidate non-code based documentation in the repository, removing redundancy and contradictions.
 - `/readme`: Generate a concise, well-structured README.md for any repo -- libraries, CLIs, applications, APIs, monorepos, frameworks, and plugins.
@@ -37,6 +38,7 @@ npx skills add https://github.com/Nathan13888/nice-skills --skill reflect
 npx skills add https://github.com/Nathan13888/nice-skills --skill wtf
 npx skills add https://github.com/Nathan13888/nice-skills --skill feature-branch
 npx skills add https://github.com/Nathan13888/nice-skills --skill doc-n-fix
+npx skills add https://github.com/Nathan13888/nice-skills --skill issue
 npx skills add https://github.com/Nathan13888/nice-skills --skill send-it
 npx skills add https://github.com/Nathan13888/nice-skills --skill combine-docs
 npx skills add https://github.com/Nathan13888/nice-skills --skill readme
