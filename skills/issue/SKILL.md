@@ -1,6 +1,6 @@
 ---
 name: issue
-description:
+description: >-
   Capture a problem or change request, verify it lightly against the codebase,
   draft a structured issue report, then route to one of: upload to
   GitHub/GitLab, document in code, hand off for implementation, or a free-text
