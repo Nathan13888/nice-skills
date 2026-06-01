@@ -4,6 +4,8 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 
 ## Available Skills
 
+For a deeper map of what each skill does, how they differ, and how they fit together, see [SKILLS.md](./SKILLS.md).
+
 - `/init-repo`: Initialize a new project repository for development and (optionally) create a MVP for your project.
 - `/mvp`: Product design and feature planning for new projects -- deep requirements gathering, feature ideation, scope management, technical architecture, and living documentation.
 - `/sus`: Find sloppy and highly problematic code, affecting maintainability and core functionalities of the application.
@@ -14,6 +16,7 @@ Opinionated (read "objectively correct") skills for coding agents like Claude Co
 - `/feature-branch`: Create a new git branch off trunk using the project's existing naming convention, slugifying a free-text feature description.
 - `/doc-n-fix`: Process PR review feedback into a prioritized checklist, then fix issues one by one with progress tracking.
 - `/issue`: Capture a problem or change request, verify it lightly against the codebase, draft a structured report, then upload, document, or hand off for a fix.
+- `/tackle`: Turn arbitrary feedback (URL, paste, image, file, free text) into a confirmed action plan and dispatch each item to a human, the main agent, or a subagent.
 - `/send-it`: Push feature branch and create a GitHub PR with structured title and description.
 - `/combine-docs`: Consolidate non-code based documentation in the repository, removing redundancy and contradictions.
 - `/readme`: Generate a concise, well-structured README.md for any repo -- libraries, CLIs, applications, APIs, monorepos, frameworks, and plugins.
@@ -39,6 +42,7 @@ npx skills add https://github.com/Nathan13888/nice-skills --skill wtf
 npx skills add https://github.com/Nathan13888/nice-skills --skill feature-branch
 npx skills add https://github.com/Nathan13888/nice-skills --skill doc-n-fix
 npx skills add https://github.com/Nathan13888/nice-skills --skill issue
+npx skills add https://github.com/Nathan13888/nice-skills --skill tackle
 npx skills add https://github.com/Nathan13888/nice-skills --skill send-it
 npx skills add https://github.com/Nathan13888/nice-skills --skill combine-docs
 npx skills add https://github.com/Nathan13888/nice-skills --skill readme
