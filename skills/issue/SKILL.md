@@ -19,8 +19,6 @@ allowed-tools:
 
 # Issue
 
-Turn a free-text problem report into a structured issue artifact, verify it lightly against the codebase, then route the result to a chosen destination: upload to GitHub/GitLab, document in code, hand off for an implementation, or a free-text custom action.
-
 ## Workflow
 
 Follow all 6 steps sequentially.
@@ -64,8 +62,7 @@ echo "ISSUE_ID=$ISSUE_ID"
 | Not a git repo (`IS_GIT` is not `true`)                                        | Report "Not a git repository. /issue needs a git repo to anchor the report." and **STOP**                                                                |
 | `RAW_DESC` empty after the bare-invocation prompt                              | Report "No description provided." and **STOP**                                                                                                          |
 | `RAW_DESC` shorter than 8 chars or only generic words ("bug", "broken", "fix") | Print "That description is too vague. Add detail: what happened, where (file/symbol if known), what you expected." and **stop the turn**. Append the user's next message to `RAW_DESC` and re-validate. |
-| `HOST=none`                                                                    | Continue. Note in Step 5 that option 1 (upload) will be unavailable.                                                                                    |
-| `HOST=unknown`                                                                 | Continue. Note in Step 5 that option 1 is unavailable for non-GitHub/GitLab remotes.                                                                    |
+| `HOST` in `{none, unknown}`                                                    | Continue. Step 5 option 1 (upload) will be omitted because no GitHub/GitLab remote was detected.                                                        |
 
 Store all preflight vars for downstream steps.
 
@@ -139,7 +136,7 @@ Draft the report using this structure:
 
 ### Suggested resolution
 
-{1 paragraph or 2-4 bullets, framed as a proposal not a prescription. For `cannot-confirm`, lead with "Investigate whether..."}
+{1 paragraph or 2-4 bullets, framed as a proposal not a prescription. When verdict is `cannot-confirm`, lead with "Investigate whether..."}
 
 ### Open questions
 
@@ -166,9 +163,9 @@ Loop until the user picks option 1 or 4.
 
 ### Step 5: Choose Next Step
 
-`AskUserQuestion`, **single-select**, 4 options. If `HOST=none` or `HOST=unknown`, hide option 1 entirely -- do not present it as selectable.
+`AskUserQuestion`, single-select:
 
-1. **Upload to issues** -- push the report to GitHub or GitLab (the detected host) via `gh` / `glab`.
+1. **Upload to issues** -- push to GitHub/GitLab via `gh` / `glab`. **Omit this option entirely when `HOST` is `none` or `unknown`** (do not present it as selectable).
 2. **Document in code** -- add a `TODO(issue):` comment near the relevant code, append to `ISSUES.md`, or write to a custom path.
 3. **Implement a fix now** -- hand off the report as context so the main agent (or a Task subagent) starts work.
 4. **Something else** -- free-text field for edits, multi-action sequences, custom paths.
@@ -380,9 +377,9 @@ Print "What would you like to do? Examples: 'edit the report', 'upload and also 
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | "edit", "revise", "change the {section}"           | Re-enter Step 4 with the user's edits applied                                                                                     |
 | "upload AND document", "do both", "1 and 2", "all" | Run 6A then 6B then 6C in the order implied. Between each sub-flow, `AskUserQuestion` with options **Continue to {next}** / **Stop here**. |
-| "save to {path}"                                   | Treat as 6B option 3 with the specified path                                                                                      |
+| "save to {path}"                                   | Use `Write` to create `{path}` with the full draft body, report success per 6B's template. Do not re-prompt for the path.         |
 | "cancel", "abandon", "never mind"                  | Discard `/tmp/issue-${ISSUE_ID}.md` and **STOP**                                                                                  |
-| Other interpretable intent                         | State the interpretation back, ask one clarification via `AskUserQuestion`, then execute                                          |
+| Other interpretable intent                         | State the interpretation back, then `AskUserQuestion` with options **Confirm** / **Re-explain** / **Cancel**. Execute on Confirm; re-enter 6D on Re-explain; STOP on Cancel. |
 | Uninterpretable                                    | `AskUserQuestion` with options **Explain differently** / **Go back to the 4 options** / **Cancel**. |
 
 After any success path, clean up `/tmp/issue-${ISSUE_ID}.md`.
@@ -391,16 +388,8 @@ After any success path, clean up `/tmp/issue-${ISSUE_ID}.md`.
 
 - **Always render the picker for enumerated options.** Whenever a step lists 2-4 selectable choices, you MUST invoke `AskUserQuestion` so the user sees a pre-filled picker. Never print numbered options in markdown alone and wait -- the user cannot select from inline text. For genuine free-text inputs (no enumerable choices), print the question and stop the turn so the user replies in chat; do not call `AskUserQuestion` with invented options.
 - **GitLab CLI is `glab`, not `gl`.** Every user-facing message must use `glab`. If the user mentioned `gl` anywhere, gently correct them in the error/info copy.
-- **`Write` tool for all temp files** -- always create `/tmp/issue-${ISSUE_ID}.md` via the `Write` tool. **DO NOT** use `echo`, `cat <<EOF`, or shell redirects. Pass it via `--body-file` (gh) or `--description-file` (glab).
-- **Preserve the temp file on 6A failure** -- on auth or CLI-missing errors, do not delete the file. Tell the user the path so they can re-run after fixing the issue.
-- **Defer auth checks** -- never run `gh auth status` / `glab auth status` until the user actually chooses option 1. The skill must work offline for options 2/3/4.
-- **Never fabricate evidence** -- if the user did not supply reproduction steps, write "Not provided". If verification cannot confirm the issue, the verdict is `cannot-confirm`, not `confirmed`.
-- **Step 4 regenerate cap** -- at most one regeneration. After that, option 3 becomes "use this anyway" to prevent loops.
-- **Never auto-commit** -- after any sub-flow, the user runs `/commit` themselves. Do not stage or commit on their behalf.
-- **No `--dry-run` flag** -- Step 4 confirmation and Step 5 picker are already the safe abort points. `/tmp/issue-${ISSUE_ID}.md` is the dry-run artifact.
-- **Sub-agents are an escalation, not a default** -- Step 2 verification stays inline unless >=3 files are involved. Step 6C handoff stays inline unless Step 2 already used a Task agent AND >=2 files need to change.
-- **Self-hosted hosts** (Gitea, Bitbucket, self-hosted GitLab on custom domains) classify as `unknown` and the user routes through option 4 with a free-text intent. No env-var override in v1.
-- **GitLab duplicate detection is deferred** -- `glab issue list --search` semantics vary by version. v1 only checks duplicates on GitHub.
-- **Label filtering before create** -- always intersect suggested labels with the repo's existing labels (`gh label list` / `glab label list`). Report dropped labels in the success block.
-- **`ISSUES.md` is idempotent** -- always `Read` the file first and append under `## Open`. Never overwrite existing entries.
-- **Title quoting** -- when passing the title to `gh issue create` / `glab issue create`, ensure it is properly quoted to handle special characters.
+- **Never auto-commit.** After any sub-flow, the user runs `/commit` themselves. Do not stage or commit on their behalf.
+- **No `--dry-run` flag.** Step 4 confirmation and Step 5 picker are the safe abort points. `/tmp/issue-${ISSUE_ID}.md` is the dry-run artifact.
+- **Sub-agents are an escalation, not a default.** Step 2 stays inline unless the >=3-file trigger fires; Step 6C stays inline unless Step 2 already escalated AND >=2 files need editing.
+- **Self-hosted hosts** (Gitea, Bitbucket, self-hosted GitLab on custom domains) classify as `unknown`; users route through option 4. No env-var override in v1.
+- **Title quoting.** When passing the title to `gh issue create` / `glab issue create`, ensure it is properly quoted to handle special characters.
