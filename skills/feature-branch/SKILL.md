@@ -14,13 +14,9 @@ allowed-tools:
 
 # Feature Branch
 
-One-shot helper that turns `/feature-branch <feature description>` into a properly named branch checked out from trunk. Detects the trunk branch and the local naming convention from a single `git branch -vv` call, slugifies the description, and runs `git checkout -b`.
-
-`Read`, `Write`, `Edit`, `Glob`, and `Grep` are intentionally excluded from allowed-tools. This skill MUST NOT read or modify any files. The only mutating action is `git checkout -b`.
-
 ## Workflow
 
-Follow all 4 steps sequentially.
+Follow all 5 steps sequentially. `Read`, `Write`, `Edit`, `Glob`, and `Grep` are intentionally excluded from allowed-tools -- this skill must not read or modify any files, and `git checkout -b` is the only mutating command.
 
 ### Step 1: Parse the argument
 
@@ -60,6 +56,13 @@ echo "=== EMAIL ==="
 git config user.email
 echo "=== STATUS ==="
 git status --porcelain 2>/dev/null | head -20
+echo "=== TRUNK_SHA ==="
+for t in main master trunk develop; do
+  if git rev-parse --verify "$t" &>/dev/null; then
+    git rev-parse --short "$t"
+    break
+  fi
+done
 ```
 
 Route on the result:
@@ -96,7 +99,7 @@ Parse the rest of the output silently. Never echo raw git output back to the use
 - Replace each run of non-alphanumeric characters with a single `-`.
 - Strip leading/trailing `-`.
 - Truncate at 50 characters; if the truncation lands mid-word, cut back to the last `-`.
-- Keep meaningful short words (don't aggressively drop articles like "a"/"the" -- readability matters more than terseness).
+- Do not drop words selectively -- the slug is mechanically derived from the description.
 
 **Compose:** `<prefix><slug>` (e.g. `feat/add-rate-limiting`, `nathan/add-rate-limiting`).
 
@@ -104,15 +107,15 @@ Parse the rest of the output silently. Never echo raw git output back to the use
 
 ### Step 4: Confirm and create
 
-Decide whether to ask or proceed directly:
+Apply the following rules in order; the first matching rule fires. Multiple rules may contribute (e.g. a dirty tree note plus a convention picker), but only one `AskUserQuestion` call should run per turn.
 
-| Situation | Action |
-| --- | --- |
-| Convention clear, no collision, working tree clean | Print preview + run `git checkout -b <name> <trunk>` directly. |
-| Multiple plausible conventions | `AskUserQuestion`: list up to 4 candidates (e.g. `feat/<slug>`, `<username>/<slug>`, any other detected dominant pattern). |
-| Name already exists locally | `AskUserQuestion`: offer `<name>-2`, switch to existing branch, or cancel. |
-| Working tree has uncommitted changes | Add a one-line warning in the preview ("Note: uncommitted changes will carry over") but proceed unless the user cancels. |
-| No trunk identified | `AskUserQuestion`: list detected local branches as trunk candidates. |
+| Order | Situation | Action |
+| --- | --- | --- |
+| 1 | Step 3 flagged multiple plausible conventions | `AskUserQuestion` listing exactly the patterns Step 3 flagged, with `feat/<slug>` as a fallback when fewer than 3 are flagged. |
+| 2 | Proposed name already exists locally | `AskUserQuestion` with options `<name>-2` / switch to existing branch / cancel. |
+| 3 | Convention clear, no collision | Print preview and run `git checkout -b <name> <trunk>` directly. |
+
+If the working tree is dirty, prepend a one-line note to the preview ("Note: uncommitted changes will carry over") in any of the rows above. Do not ask -- the user has already seen the preview and can interrupt.
 
 **Preview format (before creating):**
 
@@ -132,7 +135,7 @@ If `git checkout -b` fails, report the exact stderr and **STOP**. Do not retry w
 
 ### Step 5: Report
 
-On success, output a single markdown block:
+On success, output a single markdown block using `TRUNK_SHA` captured in Step 2:
 
 ```markdown
 ## Branch created
@@ -142,13 +145,10 @@ On success, output a single markdown block:
 - **Convention:** `feat/` (matched 5 of 7 sibling branches)
 ```
 
-Use `git rev-parse --short <trunk>` to fill in the short SHA if it wasn't already captured.
-
 ## Guidelines
 
 - **Always render the picker for enumerated options.** Whenever a step lists 2-4 selectable choices (e.g. trunk candidates, collision alternatives, multiple plausible conventions), you MUST invoke `AskUserQuestion` so the user sees a pre-filled picker. Never print numbered options in markdown and wait -- the user cannot select from inline text. For genuine free-text inputs, print the question and stop the turn instead of calling `AskUserQuestion` with invented options.
 - Only one mutating command (`git checkout -b`). Never `git fetch`, `git pull`, `git push`, or `git branch -d/-D`.
 - Branch is created from the **local** trunk ref. If the user wants the latest remote, they can pull first.
-- No subagents. No file reads. No editing.
 - Parse git output silently and present structured markdown. Never dump raw git output to the user.
 - If anything fails, surface the real git error rather than retrying with guesses.

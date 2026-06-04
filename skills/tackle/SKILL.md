@@ -20,8 +20,6 @@ allowed-tools:
 
 # Tackle
 
-Turn arbitrary external feedback into a dispatched action plan against the current repo. Accepts any source -- GitHub/GitLab URL, pasted reviewer comments, an image, a file path, free text, or any combination. Decomposes feedback into typed actions, assigns each to a human, the main agent, or a subagent, confirms with the user, then dispatches execution.
-
 `/tackle` is execution-first. The deliverable is the diff, not a report.
 
 ## Workflow
@@ -112,7 +110,7 @@ Produce an `EVIDENCE` block: **Verdict** (`confirmed | partial | cannot-confirm 
 | Pri         | P1 / P2 / P3                                                                             |
 | Source      | URL fragment, "pasted §N", "image #1", or `file:line`                                    |
 
-Only add a `Deps` column if the model spontaneously notices ordering ("A introduces helper, B uses it"). Otherwise omit.
+Step 5 walks items in ascending `#` order within each priority tier. Do not add a `Deps` column.
 
 3. **Priority signals**: P1 -- "must", "broken", "wrong", "blocker", "security", "critical", "fix this". P3 -- "nit", "consider", "optional", "minor", "style", "suggestion". Everything else P2.
 
@@ -134,18 +132,24 @@ Present the plan inline as a markdown table:
 | 3   | Migrate to `jose`?    | human              | --               | P2  | image #1  |
 ```
 
-`AskUserQuestion`, single-select:
+`AskUserQuestion`:
 
 1. **Looks good** -- proceed.
 2. **Edit** -- after the picker resolves to this option, print "What would you like to change? (re-prioritize, reassign, split, merge, remove, add)" and **stop the turn**. Apply the user's next message exactly, do not re-derive. Re-present.
 3. **Regenerate from scratch** -- discard and re-run Step 3. After one regeneration, replace this option with "Already regenerated -- use this one anyway."
 4. **Cancel** -- "Cancelled. No plan dispatched." **STOP**.
 
-After option 1, `Write` `/tmp/tackle-${TACKLE_ID}.md`: a header line `**Started:** {YYYY-MM-DD HH:MM} | **Progress:** 0/{total} | **Sources:** {sources} | **Verification:** {verdict}`, then the same table from above with `- [ ] **#{n}**` checkbox prefixes on each row body. No additional templating -- mirror what the user just approved.
+After option 1, `Write` `/tmp/tackle-${TACKLE_ID}.md` with three sections so resume has everything it needs:
+
+1. A header line `**Started:** {YYYY-MM-DD HH:MM} | **Progress:** 0/{total} | **Sources:** {sources} | **Verification:** {verdict}`.
+2. The approved table, with `- [ ] **#{n}**` checkbox prefixes on each row body.
+3. A `## Source corpus` section containing the full `FEEDBACK_CORPUS` (verbatim, with the same source labels Step 1 produced).
+
+Resume re-reads the corpus from section 3 -- do not store it elsewhere.
 
 ### Step 5: Dispatch + Progress
 
-Walk items in dependency order, P1 > P2 > P3 within a level. Dispatch by owner. After each item resolves: `Edit` the plan file to flip `- [ ]` to `- [x]` (or `- [~]` for skips with `-- skipped: {reason}`), bump the `**Progress:**` numerator, and print one line: `Tackle #{n} complete: {description} -- Progress: {x}/{total}`. Continue automatically -- never ask "continue?" between items.
+Walk items in priority order (P1 before P2 before P3) and ascending `#` within a tier. Dispatch by owner. After each item resolves: `Edit` the plan file to flip `- [ ]` to `- [x]` (or `- [~]` for skips with `-- skipped: {reason}`), bump the `**Progress:**` numerator, and print one line: `Tackle #{n} complete: {description} -- Progress: {x}/{total}`. Continue automatically for `human` and `subagent` items -- never ask "continue?" between them. The first `main-agent` item triggers the inline handoff in 5B and stops the skill; remaining `main-agent` items queue in the plan file for `/tackle --resume`.
 
 #### 5A. `human` items
 
@@ -153,7 +157,7 @@ Emit as `- [ ]` under a **Needs you** heading in the running summary. Do not exe
 
 #### 5B. `main-agent` items
 
-Emit one inline-handoff block and **stop the skill** -- the parent turn implements the item from "Starting on item N.":
+Emit one inline-handoff block -- the parent turn implements the item from "Starting on item N.":
 
 ```markdown
 ## Now tackling: #{n} -- {Description}
@@ -172,8 +176,6 @@ Plan saved at /tmp/tackle-${TACKLE_ID}.md.
 
 Starting on item {n}.
 ```
-
-If multiple `main-agent` items exist, only the first dispatches. The rest queue in the plan file for `/tackle --resume`.
 
 #### 5C. `subagent` items
 
@@ -234,8 +236,8 @@ Capture the returned summary verbatim into the progress line.
 
 #### Resume (`/tackle --resume` or `/tackle resume [id]`)
 
-1. If no `id`, `Glob /tmp/tackle-*.md`. If one match, auto-pick; else `AskUserQuestion`.
-2. `Read` the plan, find the first `- [ ]` in dependency order, and jump to **Step 5** from there. Skip Steps 1-4 -- the plan is already confirmed.
+1. If no `id`, `Glob /tmp/tackle-*.md`. With one match, auto-pick. With 2-4 matches, `AskUserQuestion` listing each filename (label) + the plan's `**Started:**` header (description). With >4, pick the 4 most recent by mtime and note in the prompt that older plans were truncated.
+2. `Read` the plan, recover `FEEDBACK_CORPUS` from the `## Source corpus` section, find the first `- [ ]` using Step 5's walk order (P1 before P2 before P3, ascending `#` within a tier), and jump to **Step 5** from there. Skip Steps 1-4 -- the plan is already confirmed.
 
 Resume is idempotent: re-toggling `[x]` is a no-op; a fully-done plan exits cleanly.
 
@@ -243,10 +245,6 @@ Resume is idempotent: re-toggling `[x]` is a no-op; a fully-done plan exits clea
 
 - **Always render the picker for enumerated options.** Whenever a step lists 2-4 selectable choices (Step 4 confirmation, resume-id selection), you MUST invoke `AskUserQuestion` so the user sees a pre-filled picker. Never print numbered options in markdown and wait -- the user cannot select from inline text. For genuine free-text inputs, print the question and stop the turn instead of calling `AskUserQuestion` with invented options.
 - **Combined plan by design.** Multi-source input merges into one plan with per-item `source:` labels.
-- **Subagent dispatch is an escalation, not a default.** Default is `main-agent` inline handoff. Escalate only when the owner rule fires.
-- **Don't fabricate evidence.** If reproduction steps are absent, write "Not provided". `cannot-confirm` carries through Step 4.
-- **`Write` tool for the plan file.** Never `echo`, `cat <<EOF`, or shell redirects.
-- **Preserve `/tmp/tackle-*.md` on partial failure** so resume always works.
+- **Don't fabricate evidence.** If the corpus does not support a claim, write "Not provided"; `cannot-confirm` carries through Step 4.
+- **Plan file via `Write`, preserved on partial failure.** Use the `Write` tool (never `echo`, `cat <<EOF`, or shell redirects). Never delete `/tmp/tackle-*.md` mid-run -- resume depends on it.
 - **GitLab CLI is `glab`, not `gl`.** Correct the user in copy if they typed `gl`.
-- **One regeneration cap in Step 4** to prevent loops.
-- **Inline handoff stops the skill.** After emitting the Step 5B block, return control. Resume picks up the rest.
