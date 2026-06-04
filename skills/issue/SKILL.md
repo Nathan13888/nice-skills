@@ -29,7 +29,7 @@ Follow all 6 steps sequentially.
 
 1. Parse everything after `/issue` as `RAW_DESC`.
    - `/issue <text>` -- `RAW_DESC=<text>`
-   - `/issue` (bare) -- use `AskUserQuestion` with a free-text field titled "What's the issue?"
+   - `/issue` (bare) -- print "What's the issue? Describe what happened and where (file/symbol if known)." and **stop the turn**. Treat the user's next message as `RAW_DESC`.
 
 2. Run a single Bash call to gather context. Defer `gh`/`glab` auth checks until Step 6A -- the skill is useful for options 2/3/4 even without remote auth.
 
@@ -63,7 +63,7 @@ echo "ISSUE_ID=$ISSUE_ID"
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Not a git repo (`IS_GIT` is not `true`)                                        | Report "Not a git repository. /issue needs a git repo to anchor the report." and **STOP**                                                                |
 | `RAW_DESC` empty after the bare-invocation prompt                              | Report "No description provided." and **STOP**                                                                                                          |
-| `RAW_DESC` shorter than 8 chars or only generic words ("bug", "broken", "fix") | `AskUserQuestion` with a free-text field: "That description is too vague. Add detail: what happened, where (file/symbol if known), what you expected." Re-validate. |
+| `RAW_DESC` shorter than 8 chars or only generic words ("bug", "broken", "fix") | Print "That description is too vague. Add detail: what happened, where (file/symbol if known), what you expected." and **stop the turn**. Append the user's next message to `RAW_DESC` and re-validate. |
 | `HOST=none`                                                                    | Continue. Note in Step 5 that option 1 (upload) will be unavailable.                                                                                    |
 | `HOST=unknown`                                                                 | Continue. Note in Step 5 that option 1 is unavailable for non-GitHub/GitLab remotes.                                                                    |
 
@@ -158,7 +158,7 @@ Draft the report using this structure:
 Present the draft inline. Then `AskUserQuestion` with single-select options:
 
 1. **Looks good** -- proceed to Step 5.
-2. **Edit** -- user types changes (title, body section, labels). Apply edits exactly as specified, do not re-derive. Re-present the updated draft and re-ask Step 4.
+2. **Edit** -- after the picker resolves to this option, print "What would you like to change? (title, body section, labels)" and **stop the turn**. Apply the user's next message exactly as specified, do not re-derive. Re-present the updated draft and re-ask Step 4.
 3. **Regenerate from scratch** -- discard the draft and re-run Steps 2-3. After one regeneration, replace option 3 with "Already regenerated -- use this one anyway" to prevent infinite loops.
 4. **Cancel** -- discard and **STOP** with "Cancelled. No issue created."
 
@@ -256,7 +256,7 @@ Before any sub-flow, use the `Write` tool to create `/tmp/issue-${ISSUE_ID}.md` 
 
 1. **Inline at `{file:line}` from Step 2 evidence** -- only show when Step 2 produced a `confirmed` verdict with a single dominant `file:line` anchor.
 2. **Append to `ISSUES.md` at repo root** -- create if missing. Recommended default.
-3. **Custom path** -- free-text field. Default to `docs/issues/{slug-of-title}.md` if the path doesn't yet exist.
+3. **Custom path** -- after the picker resolves to this option, print "Enter the target path (default: `docs/issues/{slug-of-title}.md`)." and **stop the turn**. Treat the user's next message as the path.
 
 **Inline comment** (language-aware by file extension):
 
@@ -374,23 +374,22 @@ Report the subagent's summary back to the user. Do not loop into another round o
 
 #### 6D. Something else (free text)
 
-`AskUserQuestion` with a free-text field: "What would you like to do? Examples: 'edit the report', 'upload and also document', 'save to ~/notes/issue.md', 'cancel'."
-
-Interpret the response and route:
+Print "What would you like to do? Examples: 'edit the report', 'upload and also document', 'save to ~/notes/issue.md', 'cancel'." and **stop the turn**. Interpret the user's next message and route:
 
 | Pattern                                            | Action                                                                                                                            |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | "edit", "revise", "change the {section}"           | Re-enter Step 4 with the user's edits applied                                                                                     |
-| "upload AND document", "do both", "1 and 2", "all" | Run 6A then 6B then 6C in the order implied. Between each sub-flow, `AskUserQuestion`: "Continue to {next}?"                       |
+| "upload AND document", "do both", "1 and 2", "all" | Run 6A then 6B then 6C in the order implied. Between each sub-flow, `AskUserQuestion` with options **Continue to {next}** / **Stop here**. |
 | "save to {path}"                                   | Treat as 6B option 3 with the specified path                                                                                      |
 | "cancel", "abandon", "never mind"                  | Discard `/tmp/issue-${ISSUE_ID}.md` and **STOP**                                                                                  |
 | Other interpretable intent                         | State the interpretation back, ask one clarification via `AskUserQuestion`, then execute                                          |
-| Uninterpretable                                    | `AskUserQuestion`: "I couldn't interpret that. Pick: (a) explain differently, (b) go back to the 4 options, (c) cancel."           |
+| Uninterpretable                                    | `AskUserQuestion` with options **Explain differently** / **Go back to the 4 options** / **Cancel**. |
 
 After any success path, clean up `/tmp/issue-${ISSUE_ID}.md`.
 
 ## Guidelines
 
+- **Always render the picker for enumerated options.** Whenever a step lists 2-4 selectable choices, you MUST invoke `AskUserQuestion` so the user sees a pre-filled picker. Never print numbered options in markdown alone and wait -- the user cannot select from inline text. For genuine free-text inputs (no enumerable choices), print the question and stop the turn so the user replies in chat; do not call `AskUserQuestion` with invented options.
 - **GitLab CLI is `glab`, not `gl`.** Every user-facing message must use `glab`. If the user mentioned `gl` anywhere, gently correct them in the error/info copy.
 - **`Write` tool for all temp files** -- always create `/tmp/issue-${ISSUE_ID}.md` via the `Write` tool. **DO NOT** use `echo`, `cat <<EOF`, or shell redirects. Pass it via `--body-file` (gh) or `--description-file` (glab).
 - **Preserve the temp file on 6A failure** -- on auth or CLI-missing errors, do not delete the file. Tell the user the path so they can re-run after fixing the issue.

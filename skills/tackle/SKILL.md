@@ -32,7 +32,7 @@ Follow all 6 steps sequentially.
 
 1. Parse everything after `/tackle` as `RAW_ARG`.
    - `/tackle <text-and/or-urls>` -- normal flow.
-   - `/tackle` (bare) -- `AskUserQuestion` with a free-text field: "Paste the feedback or share a link / file path."
+   - `/tackle` (bare) -- print "Paste the feedback or share a link / file path." and **stop the turn**. Treat the user's next message as `RAW_ARG`.
    - `/tackle --resume` or `/tackle resume [id]` -- jump to **Step 6 (Resume)**.
 
 2. Run a single Bash call to gather context. No upfront auth check.
@@ -137,7 +137,7 @@ Present the plan inline as a markdown table:
 `AskUserQuestion`, single-select:
 
 1. **Looks good** -- proceed.
-2. **Edit** -- user types changes (re-prioritize, reassign, split, merge, remove, add). Apply exactly, do not re-derive. Re-present.
+2. **Edit** -- after the picker resolves to this option, print "What would you like to change? (re-prioritize, reassign, split, merge, remove, add)" and **stop the turn**. Apply the user's next message exactly, do not re-derive. Re-present.
 3. **Regenerate from scratch** -- discard and re-run Step 3. After one regeneration, replace this option with "Already regenerated -- use this one anyway."
 4. **Cancel** -- "Cancelled. No plan dispatched." **STOP**.
 
@@ -241,6 +241,7 @@ Resume is idempotent: re-toggling `[x]` is a no-op; a fully-done plan exits clea
 
 ## Guidelines
 
+- **Always render the picker for enumerated options.** Whenever a step lists 2-4 selectable choices (Step 4 confirmation, resume-id selection), you MUST invoke `AskUserQuestion` so the user sees a pre-filled picker. Never print numbered options in markdown and wait -- the user cannot select from inline text. For genuine free-text inputs, print the question and stop the turn instead of calling `AskUserQuestion` with invented options.
 - **Combined plan by design.** Multi-source input merges into one plan with per-item `source:` labels.
 - **Subagent dispatch is an escalation, not a default.** Default is `main-agent` inline handoff. Escalate only when the owner rule fires.
 - **Don't fabricate evidence.** If reproduction steps are absent, write "Not provided". `cannot-confirm` carries through Step 4.

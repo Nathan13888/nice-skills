@@ -29,9 +29,7 @@ Take everything after `/feature-branch` as the raw feature description. Examples
 - `/feature-branch add rate limiting` -> description is "add rate limiting"
 - `/feature-branch` (bare) -> description is empty
 
-If the description is empty, use `AskUserQuestion` to ask:
-
-> "What is the new branch for? Describe the feature in a short phrase."
+If the description is empty, print "What is the new branch for? Describe the feature in a short phrase." and **stop the turn**. Treat the user's next message as the description.
 
 Do not slugify yet -- Step 3 needs the convention information from Step 2 first.
 
@@ -148,6 +146,7 @@ Use `git rev-parse --short <trunk>` to fill in the short SHA if it wasn't alread
 
 ## Guidelines
 
+- **Always render the picker for enumerated options.** Whenever a step lists 2-4 selectable choices (e.g. trunk candidates, collision alternatives, multiple plausible conventions), you MUST invoke `AskUserQuestion` so the user sees a pre-filled picker. Never print numbered options in markdown and wait -- the user cannot select from inline text. For genuine free-text inputs, print the question and stop the turn instead of calling `AskUserQuestion` with invented options.
 - Only one mutating command (`git checkout -b`). Never `git fetch`, `git pull`, `git push`, or `git branch -d/-D`.
 - Branch is created from the **local** trunk ref. If the user wants the latest remote, they can pull first.
 - No subagents. No file reads. No editing.
