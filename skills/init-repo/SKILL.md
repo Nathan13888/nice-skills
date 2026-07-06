@@ -31,6 +31,10 @@ Track these variables throughout the entire workflow. Once set, use the stored v
 | `{LLVM_COV}`       | Phase 1                       | Whether LLVM coverage is enabled (`yes`/`no`). Only set for Rust projects with GitHub Actions CI.                                                                                                                                                                                                                                                         |
 | `{COV_THRESHOLD}`  | Phase 1                       | Minimum coverage percentage (e.g., `80`), or empty if no threshold enforced.                                                                                                                                                                                                                                                                              |
 | `{PACKAGES}`       | Phase 1                       | List of packages for multi-package projects. Each entry: `{name, dir, lang, exts, format_fix_cmd, lint_fix_cmd, format_check_cmd, lint_check_cmd, test_cmd, coverage_cmd}`. Only set when the project has multiple packages with different toolchains.                                                                                                    |
+| `{RELEASE_CI}`     | Phase 1                       | Whether a release CI workflow (triggered by merging a version-bump PR) is set up (`yes`/`no`). GitHub Actions only.                                                                                                                                                                                                                                         |
+| `{RELEASE_TOOL}`   | Phase 1                       | `release-plz` (Rust, forced) / `release-please` / `changesets` / `commitizen` / `goreleaser` / a custom name. Only set when `{RELEASE_CI}` is `yes`.                                                                                                                                                                                                        |
+| `{AUTOMATED_CHANGELOG}` | Phase 1                  | Whether an automated `CHANGELOG.md` is set up (`yes`/`no`). `yes` also enables conventional-commit enforcement via `convco`. Only asked when `{RELEASE_CI}` is `yes`.                                                                                                                                                                                       |
+| `{CHANGELOG_ENGINE}` | Step 6.7 (derived)          | `release-plz` / `tool-native` / `git-cliff` -- which engine actually writes `CHANGELOG.md`. Precedence: release-plz's embedded git-cliff -> the release tool's own changelog -> a standalone git-cliff fallback.                                                                                                                                           |
 
 ## Workflow
 
@@ -155,6 +159,25 @@ Call `AskUserQuestion` **once** with the comprehensive form below. Populate brac
 >
 > ---
 >
+> **L. Release Automation** *(GitHub Actions only — skip if CI is None/Other)*
+>
+> Release CI workflow *(triggered by merging a PR that bumps the version)*:
+> 1. Yes
+> 2. No
+>
+> *Rust:* uses **release-plz** automatically — no choice needed.
+>
+> *Release tool (non-Rust only, if Yes):*
+> - TypeScript/JS: **release-please** (default) / changesets / enter your own: `___`
+> - Python: **release-please** (default) / commitizen (`cz bump`) / enter your own: `___`
+> - Go: **release-please** (default) / GoReleaser (always paired with release-please, which supplies the version-bump PR and tag) / enter your own: `___`
+>
+> Automated CHANGELOG? *(Yes also enforces conventional commits via convco)*
+> 1. Yes
+> 2. No
+>
+> ---
+>
 > **G. Coverage** *(Rust + GitHub Actions only — leave blank if not applicable)*
 >
 > Coverage setup:
@@ -247,6 +270,17 @@ If multi-package was selected, parse the `name:dir:runtime` string into `{PACKAG
 #### Post-intake: default branch
 
 Store the confirmed (or detected) branch name as `{DEFAULT_BRANCH}`. This is used in every subsequent step that references a branch -- never re-ask.
+
+#### Post-intake: release automation
+
+If `{CI_CD}` is not GitHub Actions, force `{RELEASE_CI}` to `no` and note to the user that release automation (Section L) requires GitHub Actions. Otherwise store `{RELEASE_CI}` as answered.
+
+If `{RELEASE_CI}` is `no`, leave `{RELEASE_TOOL}` and `{AUTOMATED_CHANGELOG}` unset -- Step 6.7 will be a no-op.
+
+If `{RELEASE_CI}` is `yes`:
+- For Rust, set `{RELEASE_TOOL}` to `release-plz` unconditionally (it is not a user choice).
+- For other runtimes, store the chosen `{RELEASE_TOOL}` (`release-please`, the language-native alternative, or the free-text name).
+- Store `{AUTOMATED_CHANGELOG}` as answered.
 
 ### Step 1: Understand the Problem
 
@@ -647,6 +681,8 @@ If GitHub Actions is selected, create `.github/workflows/ci.yml` with:
 
 > **Note:** The workflow file is created locally. The user must push the repository to GitHub and verify the workflow runs. Any required secrets (e.g., `GITHUB_TOKEN`, deployment keys) must be configured in the repository's **Settings -> Secrets and variables -> Actions**.
 
+> **Forward reference:** If `{AUTOMATED_CHANGELOG}` is `yes`, Step 6.7.4 adds an additional `commits` job to this same `ci.yml` that checks Conventional Commit compliance on pull requests. Create the base `ci.yml` here; Step 6.7 appends to it.
+
 ### Step 6.5: LLVM Code Coverage (Rust only)
 
 > **Skip this step unless the runtime is Rust AND GitHub Actions was selected in Step 6.**
@@ -766,6 +802,252 @@ coverage:
 If no task runner exists, the git hooks (Step 9) will call `cargo llvm-cov` directly.
 
 > **Coverage from day one:** The scaffolded `src/main.rs` from Step 4 already includes a test covering `greeting()`, and `fn main()` is annotated with `#[coverage(off)]` so the entry-point boilerplate does not count against the threshold. This ensures `cargo llvm-cov` reports 100% coverage on the initial scaffold. Remind the user to annotate any future boilerplate entry points with `#[coverage(off)]` and raise the threshold as they add more code and tests.
+
+### Step 6.7: Release Automation & Changelog
+
+> **Skip this step unless GitHub Actions was selected in Step 6 AND `{RELEASE_CI}` is `yes`.**
+>
+> **Ops-only mode:** Release tooling bumps a version tracked in a language-specific manifest (`Cargo.toml`, `package.json`, `pyproject.toml`, `go.mod` tags). If Steps 2-5.5 were skipped, there is no `{RUNTIME}` to key off of. Ask one clarifying follow-up -- which ecosystem should the release tool target -- before proceeding with 6.7.1/6.7.2, or skip release automation entirely if the user has no runtime in mind yet.
+
+Use `{RELEASE_TOOL}`, `{AUTOMATED_CHANGELOG}`, and `{PROJECT_KIND}` from Phase 1. The release is always initiated by **merging a PR that bumps the version** -- never by a manual tag push. Derive `{CHANGELOG_ENGINE}` per the sub-section below and store it for use in README (Step 10), CLAUDE.md (Step 11), and Summary (Step 12).
+
+#### 6.7.1 Rust -> release-plz
+
+Rust always uses [release-plz](https://github.com/release-plz/release-plz), regardless of what `{RELEASE_TOOL}` shows elsewhere -- it is not a user choice.
+
+Create `.github/workflows/release-plz.yml` **exactly as shown** -- do not improvise the job structure, this is release-plz's official two-job pattern (a PR-maintainer job and a release job) and deviating from it breaks the merge-triggers-release flow:
+
+```yaml
+name: Release-plz
+on:
+  push:
+    branches:
+      - {DEFAULT_BRANCH}
+jobs:
+  # Release unpublished packages.
+  release-plz-release:
+    name: Release-plz release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - &checkout
+        name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - &install-rust
+        name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run release-plz
+        uses: release-plz/[email protected]
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # Create a PR with the new versions and changelog, preparing the next release.
+  release-plz-pr:
+    name: Release-plz PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - *checkout
+      - *install-rust
+      - name: Run release-plz
+        uses: release-plz/[email protected]
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+```
+
+> This is release-plz's own official quickstart workflow (vendored verbatim, branch name substituted) -- including its YAML anchors (`&checkout`/`*checkout`, `&install-rust`/`*install-rust`) that share steps between the two jobs. Do not restructure the permissions blocks, job order, or `concurrency` placement (it lives under `release-plz-pr`, not at the workflow's top level) -- these are load-bearing, not stylistic.
+>
+> **How this satisfies "release initiated by merging a PR":** Both jobs run on every push to `{DEFAULT_BRANCH}` (including merges). `release-plz-pr` keeps a standing "release: vX.Y.Z" PR up to date with pending changes; `release-plz-release` only actually publishes/tags/releases when the commit on `{DEFAULT_BRANCH}` carries a version bump -- which only happens once that PR is merged. Use the exact `{DEFAULT_BRANCH}` value -- never hardcode `main`.
+>
+> **Non-published applications:** If `{PROJECT_KIND}` is Application and the crate will not be published to crates.io, drop both `CARGO_REGISTRY_TOKEN` lines from the workflow -- release-plz will still tag and create GitHub releases without it.
+
+Create `release-plz.toml` at the project root, based on `{PROJECT_KIND}`:
+
+**Library** (publishes to crates.io):
+```toml
+[workspace]
+# Changelog is handled by release-plz's embedded git-cliff -- see 6.7.3.
+```
+
+**Application** (GitHub release + tag only, no crates.io publish):
+```toml
+[workspace]
+publish = false
+git_release_enable = true
+git_tag_enable = true
+```
+
+Changelog wiring for Rust -- set `{CHANGELOG_ENGINE}` to `release-plz`:
+
+- If `{AUTOMATED_CHANGELOG}` is `yes`: do nothing further. release-plz has **git-cliff built in** and writes `CHANGELOG.md` automatically as part of the release PR. **Do NOT add a separate `cliff.toml` or install git-cliff independently for the Rust path** -- that would be a redundant, disconnected second changelog generator.
+- If `{AUTOMATED_CHANGELOG}` is `no`: add `changelog_update = false` under `[workspace]` in `release-plz.toml` so release-plz does not touch `CHANGELOG.md` at all.
+
+If `{PROJECT_KIND}` is Library, note in the Summary (Step 12) that a `CARGO_REGISTRY_TOKEN` secret must be added under Settings -> Secrets and variables -> Actions before the first publish.
+
+#### 6.7.2 Non-Rust -> the chosen `{RELEASE_TOOL}`
+
+Derive `{CHANGELOG_ENGINE}`: `release-please`, `changesets`, and `commitizen` own their changelog natively -> `tool-native`. `GoReleaser` is always paired with `release-please` (see the GoReleaser bullet below), which owns the changelog -> `tool-native`. Only an unrecognized custom tool has no native changelog -> `git-cliff` (see 6.7.3 fallback below) when `{AUTOMATED_CHANGELOG}` is `yes`.
+
+- **release-please**: create `.github/workflows/release-please.yml` using [`googleapis/release-please-action@v4`](https://github.com/googleapis/release-please-action), triggered on push to `{DEFAULT_BRANCH}`. Also create `release-please-config.json` and `.release-please-manifest.json` at the project root, seeded with the correct `release-type` for the runtime (`node` for TypeScript, `python` for Python, `go` for Go). The action opens/maintains a "chore: release X.Y.Z" PR; merging it creates the tag and GitHub release. It writes `CHANGELOG.md` natively when `{AUTOMATED_CHANGELOG}` is `yes` -- set `"changelog-sections"` in the config; if `{AUTOMATED_CHANGELOG}` is `no`, omit changelog generation from the config (do not create a `CHANGELOG.md`).
+
+- **changesets** (TypeScript/JS only): install `@changesets/cli` as a dev dependency, run `npx changeset init` to create `.changeset/config.json`, and create `.github/workflows/release.yml` using [`changesets/action@v1`](https://github.com/changesets/action) (`version` + `publish` commands). The action's "Version Packages" PR is the version-bump PR; merging it triggers the publish job. changesets writes `CHANGELOG.md` per-package natively when changesets are added.
+
+- **commitizen** (Python only): add a `[tool.commitizen]` table to `pyproject.toml` (`name = "cz_conventional_commits"`, `version_provider = "pep621"`, `update_changelog_on_bump = true` only if `{AUTOMATED_CHANGELOG}` is `yes`, else `false`). Create a workflow that runs `cz bump --changelog` on a schedule/dispatch to open the version-bump PR, and a second job that runs on merge to tag/release. commitizen writes `CHANGELOG.md` natively via `cz bump --changelog`.
+
+- **GoReleaser** (Go only): GoReleaser itself only builds/publishes artifacts on a tag push -- it never opens a version-bump PR or creates a git tag on its own. To preserve the "release initiated by merging a PR" invariant, **always pair it with release-please -- this is not optional and requires no separate confirmation from the user**: create `.github/workflows/release-please.yml` exactly as described in the release-please bullet above (it owns the version-bump PR and creates the tag on merge), **and, in addition**, run `goreleaser init` to create `.goreleaser.yaml` and create a second, tag-triggered `.github/workflows/goreleaser.yml` using [`goreleaser/goreleaser-action@v6`](https://github.com/goreleaser/goreleaser-action) (`on: push: tags: ['v*']`). release-please's merged release PR creates the tag, which in turn triggers the GoReleaser workflow to build and publish artifacts. Set `{CHANGELOG_ENGINE}` to `tool-native` -- release-please owns the changelog.
+
+- **Custom (free-text `{RELEASE_TOOL}`)**: create a stub `.github/workflows/release.yml` containing only `actions/checkout@v4` and a `# TODO: wire up {RELEASE_TOOL} release, triggered by merging a version-bump PR` comment. If `{AUTOMATED_CHANGELOG}` is `yes`, default `{CHANGELOG_ENGINE}` to `git-cliff` since the custom tool's changelog behavior is unknown.
+
+#### 6.7.3 git-cliff fallback (`{CHANGELOG_ENGINE}` is `git-cliff`)
+
+Only reached when `{AUTOMATED_CHANGELOG}` is `yes` and the chosen tool has no native changelog -- i.e. an unrecognized custom tool (GoReleaser is always paired with release-please, which owns its changelog -- see 6.7.2).
+
+Create `cliff.toml` at the project root using git-cliff's own default template -- **vendor it verbatim, do not hand-write the Tera template body**:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/orhun/git-cliff/main/config/cliff.toml" -o cliff.toml
+```
+
+If the `curl` fails, fall back to writing this known-good default content (identical to `git-cliff --init`) exactly as-is:
+
+```toml
+# git-cliff ~ configuration file
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+            {% if commit.breaking %}[**breaking**] {% endif %}\
+            {{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}
+"""
+trim = true
+render_always = true
+postprocessors = []
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+require_conventional = false
+split_commits = false
+commit_preprocessors = []
+protect_breaking_commits = false
+commit_parsers = [
+    { message = "^feat", group = "<!-- 0 -->🚀 Features" },
+    { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
+    { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
+    { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
+    { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
+    { message = "^style", group = "<!-- 5 -->🎨 Styling" },
+    { message = "^test", group = "<!-- 6 -->🧪 Testing" },
+    { message = "^chore\\(release\\): prepare for", skip = true },
+    { message = "^chore\\(deps.*\\)", skip = true },
+    { message = "^chore\\(pr\\)", skip = true },
+    { message = "^chore\\(pull\\)", skip = true },
+    { message = "^chore|^ci", group = "<!-- 7 -->⚙️ Miscellaneous Tasks" },
+    { body = ".*security", group = "<!-- 8 -->🛡️ Security" },
+    { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
+    { message = ".*", group = "<!-- 10 -->💼 Other" },
+]
+filter_commits = false
+fail_on_unmatched_commit = false
+link_parsers = []
+use_branch_tags = false
+topo_order = false
+topo_order_commits = true
+sort_commits = "oldest"
+recurse_submodules = false
+```
+
+Add a changelog-generation step to the release workflow (runs after the version bump, before/alongside the tag):
+
+```yaml
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGELOG.md
+```
+
+`filter_unconventional = true` in the config above means non-conventional commits (including merge commits, which default to a non-conventional subject line) are silently excluded from the generated changelog rather than causing a failure.
+
+#### 6.7.4 Conventional-commit enforcement via convco
+
+> **Only set this up if `{AUTOMATED_CHANGELOG}` is `yes`.** Convco enforcement is strictly gated on the changelog being automated -- do not offer or configure it independently, and do not set it up when `{AUTOMATED_CHANGELOG}` is `no`.
+
+[convco](https://github.com/convco/convco) is a separate binary, not a language dependency. Add it to the Summary (Step 12) and README Prerequisites (Step 10) as a required local tool:
+
+```bash
+cargo install convco --locked   # or download a prebuilt release binary from the convco releases page
+```
+
+Create `.versionrc` at the project root -- convco's config file, in YAML, vendored exactly as follows (this is also what any `tool-native` changelog generator downstream can share if it reads `.versionrc`-style config):
+
+```yaml
+---
+header: |
+  # Changelog
+types:
+  - { type: feat, section: Features }
+  - { type: fix, section: Fixes }
+  - { type: docs, section: Documentation, hidden: true }
+  - { type: refactor, section: Other, hidden: true }
+  - { type: perf, section: Other, hidden: true }
+  - { type: test, section: Other, hidden: true }
+  - { type: build, section: Other, hidden: true }
+  - { type: ci, section: Other, hidden: true }
+  - { type: chore, section: Other, hidden: true }
+```
+
+Enforcement happens at exactly three points -- do not add a fourth or substitute a different tool:
+
+1. **`commit-msg` git hook** (every local commit) -- wired in Step 9. Runs: `convco check --from-stdin < {commit-msg-file}`. This validates only the message currently being committed.
+2. **`pre-push` git hook** (before every local push) -- wired in Step 9. Runs: `convco check {DEFAULT_BRANCH_REMOTE}..HEAD` (i.e. `convco check origin/{DEFAULT_BRANCH}..HEAD`). This validates the full range of outgoing commits.
+3. **CI, on pull requests** -- add a `commits` job to `.github/workflows/ci.yml`:
+
+   ```yaml
+     commits:
+       name: Conventional commits
+       if: github.event_name == 'pull_request'
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+           with:
+             fetch-depth: 0
+         - name: Install convco
+           run: cargo install convco --locked
+         - name: Check commits
+           run: convco check ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+   ```
+
+> **Merge commits:** `convco check` skips merge commits (commits with more than one parent) by default -- it does NOT pass the `--merges` flag, which would opt back into checking them. This is intentional and required: merge commits from GitHub's merge-commit strategy, or from merging trunk into a long-lived branch, virtually never follow Conventional Commits, and failing on them would make the gate unusable. Do not add `--merges` to any of the three invocations above.
 
 ### Step 7: Licensing
 
@@ -913,6 +1195,8 @@ Use `{GIT_HOOKS}` from Phase 1. Use `{IS_MULTI_PACKAGE}` and `{PACKAGES}` from P
 | **Yes, with native hooks**           | Language-specific setup (husky, pre-commit framework, .git/hooks) |
 | **No**                               | Skip git hooks                                                    |
 
+> **Conventional-commit enforcement:** If `{AUTOMATED_CHANGELOG}` is `yes` (Step 6.7.4), also wire up `convco` at the `commit-msg` and `pre-push` stages, in addition to the format/lint/test hooks below -- see the Lefthook and native-hooks sub-sections for the exact commands. If `{AUTOMATED_CHANGELOG}` is `no` or unset, skip convco entirely; it is language-agnostic and applies the same way regardless of runtime.
+
 The hooks follow this convention:
 
 | Hook         | Action                                                |
@@ -947,7 +1231,15 @@ Lefthook is a fast, language-agnostic git hooks manager that works for any runti
 
 ##### Single-package `lefthook.yml`
 
+> **If `{AUTOMATED_CHANGELOG}` is `yes`,** add a `commit-msg` block and a `conventional-commits` command under `pre-push` (shown commented below) -- these call `convco`, set up in Step 6.7.4. Omit both entirely if `{AUTOMATED_CHANGELOG}` is `no`.
+
 ```yaml
+# Only include this block if {AUTOMATED_CHANGELOG} is yes:
+commit-msg:
+  commands:
+    conventional-commit:
+      run: convco check --from-stdin < {1}
+
 pre-commit:
   piped: true  # Runs command groups sequentially by priority; same-priority commands run in parallel
   commands:
@@ -975,6 +1267,9 @@ pre-push:
     # For Rust projects: include the following only if {LLVM_COV} is yes AND hooks coverage was selected:
     coverage:
       run: { just coverage | cargo llvm-cov [--fail-under-lines {COV_THRESHOLD}] } # use task runner command if available, otherwise raw cargo llvm-cov
+    # Only include if {AUTOMATED_CHANGELOG} is yes -- validates the full outgoing commit range; merge commits are skipped by convco's default:
+    conventional-commits:
+      run: convco check origin/{DEFAULT_BRANCH}..HEAD
 ```
 
 ##### Multi-package `lefthook.yml`
@@ -985,7 +1280,15 @@ Use `piped: true` on `pre-commit` to enforce the format → lint ordering while 
 
 The template below shows the *pattern* with placeholder package names. Generate one entry per package in `{PACKAGES}` — the actual names, paths, and commands are derived from the user's choices and may be 2, 3, 6, or more packages.
 
+> **Conventional commits are repo-wide, not per-package.** If `{AUTOMATED_CHANGELOG}` is `yes`, add a single top-level `commit-msg` block and a single `conventional-commits` command under `pre-push` (not one per package) -- do not repeat these across `{PACKAGES}`.
+
 ```yaml
+# Only include this block if {AUTOMATED_CHANGELOG} is yes:
+commit-msg:
+  commands:
+    conventional-commit:
+      run: convco check --from-stdin < {1}
+
 pre-commit:
   piped: true  # Commands run sequentially by priority; same-priority commands run in parallel
   commands:
@@ -1024,6 +1327,9 @@ pre-push:
     coverage-{pkg.name}:
       root: "{pkg.dir}"
       run: {pkg.coverage_cmd}
+    # Only include if {AUTOMATED_CHANGELOG} is yes -- one repo-wide check, not per-package:
+    conventional-commits:
+      run: convco check origin/{DEFAULT_BRANCH}..HEAD
 ```
 
 **Concrete 3-package example** (`api` in Rust, `web` in TypeScript/Bun, `worker` in Go):
@@ -1112,6 +1418,8 @@ pre-push:
 
 If `{GIT_HOOKS}` is native hooks:
 
+> **Conventional-commit enforcement:** If `{AUTOMATED_CHANGELOG}` is `yes` (Step 6.7.4), each language section below also wires `convco` into the native `commit-msg` stage and appends a range check to `pre-push`. Skip these additions entirely if `{AUTOMATED_CHANGELOG}` is `no` or unset.
+
 **TypeScript (Bun/Node.js):**
 
 1. Install `husky` and `lint-staged`:
@@ -1140,9 +1448,17 @@ If `{GIT_HOOKS}` is native hooks:
    ```bash
    #!/bin/sh
    { format check command } && { lint check command } && { test command }
+   # Only include the line below if {AUTOMATED_CHANGELOG} is yes:
+   convco check origin/{DEFAULT_BRANCH}..HEAD
    ```
 
 6. Add `"prepare": "husky"` to `package.json` scripts so hooks are installed automatically after `npm install`.
+
+7. **Only if `{AUTOMATED_CHANGELOG}` is `yes`:** write `.husky/commit-msg`:
+   ```bash
+   #!/bin/sh
+   convco check --from-stdin < "$1"
+   ```
 
 **Python:**
 
@@ -1150,8 +1466,9 @@ If `{GIT_HOOKS}` is native hooks:
 - Create `.pre-commit-config.yaml` with:
   - Pre-commit stage hooks that **fix** (e.g., `ruff format`, `ruff check --fix`)
   - Pre-push stage hooks for format check, lint check, and `pytest` using `stages: [pre-push]`
-- Run `pre-commit install --hook-type pre-commit --hook-type pre-push`
-- Do **NOT** create a separate `.git/hooks/pre-push` script -- `pre-commit install --hook-type pre-push` already writes that file, and a manual script would overwrite the framework's hook
+  - **Only if `{AUTOMATED_CHANGELOG}` is `yes`:** a local `commit-msg`-stage hook running `convco check --from-stdin < "$1"`, and an additional `pre-push`-stage entry running `convco check origin/{DEFAULT_BRANCH}..HEAD`
+- Run `pre-commit install --hook-type pre-commit --hook-type pre-push`. **Only if `{AUTOMATED_CHANGELOG}` is `yes`,** also pass `--hook-type commit-msg`.
+- Do **NOT** create a separate `.git/hooks/pre-push` or `.git/hooks/commit-msg` script -- `pre-commit install` already writes those files, and a manual script would overwrite the framework's hook
 
 **Rust:**
 
@@ -1160,7 +1477,8 @@ If `{GIT_HOOKS}` is native hooks:
 - If `{LLVM_COV}` is `yes` and hooks coverage was selected, also append a coverage step to `.git/hooks/pre-push`:
   - If a task runner exists: call `just coverage` (or the equivalent Make target)
   - Otherwise: call `cargo llvm-cov` directly (with `--fail-under-lines {COV_THRESHOLD}` if a threshold is set)
-- Make both scripts executable (`chmod +x`)
+- **Only if `{AUTOMATED_CHANGELOG}` is `yes`:** create `.git/hooks/commit-msg` running `convco check --from-stdin < "$1"`, and append `convco check origin/{DEFAULT_BRANCH}..HEAD` to `.git/hooks/pre-push`
+- Make all scripts executable (`chmod +x`)
 
 **Go:**
 
@@ -1171,7 +1489,8 @@ If `{GIT_HOOKS}` is native hooks:
   ```
   If golangci-lint is installed (`command -v golangci-lint >/dev/null 2>&1`), also run it. Note: `golangci-lint run --fix` operates on the entire module, not just staged files -- this is an acceptable exception (like `cargo fmt`) since golangci-lint has no per-file mode.
 - Create `.git/hooks/pre-push`: runs `test -z "$(gofmt -l .)"` (fails non-zero if any files are unformatted -- `gofmt -l` alone exits 0 and would not block the push), `go vet ./...`, and `go test ./...`
-- Make both scripts executable (`chmod +x`)
+- **Only if `{AUTOMATED_CHANGELOG}` is `yes`:** create `.git/hooks/commit-msg` running `convco check --from-stdin < "$1"`, and append `convco check origin/{DEFAULT_BRANCH}..HEAD` to `.git/hooks/pre-push`
+- Make all scripts executable (`chmod +x`)
 
 ### Step 10: README.md
 
@@ -1233,6 +1552,24 @@ This project uses {Lefthook/husky/pre-commit/native hooks}. Pre-commit hooks aut
 
 GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRANCH}` and pull requests.
 
+## Releases
+
+<!-- Include this section only if {RELEASE_CI} is yes -->
+
+Releases are automated via {RELEASE_TOOL}. A standing pull request tracks the next version bump; merging it tags the release{ and publishes to crates.io, only if the package is published}.
+
+## Changelog
+
+<!-- Include this section only if {AUTOMATED_CHANGELOG} is yes -->
+
+`CHANGELOG.md` is generated automatically by {release-plz's embedded git-cliff | {RELEASE_TOOL} | git-cliff, per {CHANGELOG_ENGINE}} from Conventional Commits.
+
+## Conventional Commits
+
+<!-- Include this section only if {AUTOMATED_CHANGELOG} is yes -->
+
+Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat:`, `fix:`). Enforced by `convco` on commit, pre-push, and in CI on pull requests; merge commits are exempt.
+
 ## Code Coverage
 
 <!-- Include this section only if {LLVM_COV} is yes -->
@@ -1279,6 +1616,24 @@ This project uses {Lefthook/native hooks}. Pre-commit hooks auto-fix formatting 
 
 GitHub Actions runs format checks, linting, and tests on pushes to `{DEFAULT_BRANCH}` and pull requests.
 
+## Releases
+
+<!-- Include this section only if {RELEASE_CI} is yes -->
+
+Releases are automated via {RELEASE_TOOL}. A standing pull request tracks the next version bump; merging it tags the release.
+
+## Changelog
+
+<!-- Include this section only if {AUTOMATED_CHANGELOG} is yes -->
+
+`CHANGELOG.md` is generated automatically by {RELEASE_TOOL or git-cliff, per {CHANGELOG_ENGINE}} from Conventional Commits.
+
+## Conventional Commits
+
+<!-- Include this section only if {AUTOMATED_CHANGELOG} is yes -->
+
+Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat:`, `fix:`). Enforced by `convco` on commit, pre-push, and in CI on pull requests; merge commits are exempt.
+
 ## License
 
 {License name} -- see [LICENSE](LICENSE) for details.
@@ -1313,8 +1668,12 @@ Use this table to determine which tools belong in the Prerequisites section. Inc
 | Lefthook | https://github.com/evilmartians/lefthook | Git hooks use Lefthook |
 | cargo-llvm-cov | https://github.com/taiki-e/cargo-llvm-cov | `{LLVM_COV}` is yes |
 | golangci-lint | https://golangci-lint.run | Linter is golangci-lint |
+| convco | https://github.com/convco/convco | `{AUTOMATED_CHANGELOG}` is yes |
+| git-cliff | https://git-cliff.org | `{CHANGELOG_ENGINE}` is `git-cliff` |
+| GoReleaser | https://goreleaser.com | `{RELEASE_TOOL}` is `goreleaser` |
+| Commitizen | https://commitizen-tools.github.io/commitizen/ | `{RELEASE_TOOL}` is `commitizen` |
 
-**Not included:** Biome, ESLint, Prettier, Ruff, rustfmt, Clippy, golint, gofmt -- these are either bundled with the runtime toolchain or installed as dev dependencies by the package manager.
+**Not included:** Biome, ESLint, Prettier, Ruff, rustfmt, Clippy, golint, gofmt -- these are either bundled with the runtime toolchain or installed as dev dependencies by the package manager. Also not included: release-plz, release-please, changesets -- these run entirely inside CI and require no local install.
 
 ### Step 11: CLAUDE.md
 
@@ -1363,6 +1722,16 @@ Validate changes:
 {- Rust: "All `pub` items need doc comments. Mark fallible return types with `#[must_use]`."}
 {- Python: "Type annotations required on all function signatures."}
 {- Go: "Handle all errors explicitly -- no `_` for error returns."}
+
+<!-- Append this section only if {AUTOMATED_CHANGELOG} is yes: -->
+## Commits
+
+Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, etc.) -- enforced by `convco` on commit, pre-push, and CI. Merge commits are exempt.
+
+<!-- Append this section only if {RELEASE_CI} is yes: -->
+## Releases
+
+Releases are driven by {RELEASE_TOOL}: it maintains a version-bump pull request, and merging that PR triggers the tag/release{ + publish, if the package is published}. Never bump the version or tag manually.
 `````
 
 #### Ops-only template
@@ -1381,6 +1750,16 @@ This project uses {Lefthook/native hooks}. Pre-commit hooks auto-fix formatting 
 ## CI/CD
 
 GitHub Actions runs checks on pushes to `{DEFAULT_BRANCH}` and pull requests.
+
+<!-- Append this section only if {AUTOMATED_CHANGELOG} is yes: -->
+## Commits
+
+Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, etc.) -- enforced by `convco` on commit, pre-push, and CI. Merge commits are exempt.
+
+<!-- Append this section only if {RELEASE_CI} is yes: -->
+## Releases
+
+Releases are driven by {RELEASE_TOOL}: it maintains a version-bump pull request, and merging that PR triggers the tag/release. Never bump the version or tag manually.
 
 ## License
 
@@ -1424,6 +1803,8 @@ Dependencies: {count} installed ({comma-separated names from {INSTALLED_DEPS}}, 
 License: {license(s)}
 CI/CD: {ci/cd}
 Coverage: {cargo-llvm-cov (threshold: {COV_THRESHOLD}%, upload: {artifact/Codecov/none}) | none}
+Release: {RELEASE_TOOL, or "none" if {RELEASE_CI} is no}
+Changelog: {CHANGELOG_ENGINE, or "none" if {AUTOMATED_CHANGELOG} is no}
 Pre-commit: {yes/no}
 
 Files created:
@@ -1435,6 +1816,9 @@ Next steps:
 2. Push to GitHub and verify GitHub Actions workflows run correctly
    - Configure any required secrets in Settings -> Secrets and variables -> Actions
    - {If Codecov upload was chosen: Configure `CODECOV_TOKEN` secret in Settings -> Secrets and variables -> Actions (note: Codecov is free for open-source repos only)}
+   - {If {RELEASE_TOOL} is release-plz and {PROJECT_KIND} is Library: Configure a `CARGO_REGISTRY_TOKEN` secret in Settings -> Secrets and variables -> Actions before the first release}
+   - {If {RELEASE_CI} is yes: A PAT or GitHub App token may be required instead of the default `GITHUB_TOKEN` if you want the release tool's PR to trigger this repo's other CI workflows (the default token does not re-trigger workflows on its own PRs)}
+   - {If {AUTOMATED_CHANGELOG} is yes: Install `convco` locally (`cargo install convco --locked`) so commit-msg and pre-push hooks work}
 3. Start building!
 
 ```
@@ -1447,6 +1831,8 @@ Ops tooling initialized
 Location: {path}
 License: {license(s)}
 CI/CD: {ci/cd}
+Release: {RELEASE_TOOL, or "none" if {RELEASE_CI} is no}
+Changelog: {CHANGELOG_ENGINE, or "none" if {AUTOMATED_CHANGELOG} is no}
 Pre-commit: {yes/no}
 
 Files created:
@@ -1456,6 +1842,7 @@ Next steps:
 
 1. Push to GitHub and verify GitHub Actions workflows run correctly
    - Configure any required secrets in Settings -> Secrets and variables -> Actions
+   - {If {AUTOMATED_CHANGELOG} is yes: Install `convco` locally (`cargo install convco --locked`) so commit-msg and pre-push hooks work}
 2. Start building!
 
 ```
@@ -1472,7 +1859,7 @@ If the project was created in the current directory, do NOT include a `cd` step 
 ## Guidelines
 
 - Gather all preferences in Phase 1 before creating any files. Do not assume defaults -- if the user's Phase 1 response is ambiguous or missing a required field, ask one clarifying follow-up before proceeding.
-- Use `AskUserQuestion` with concrete options, not open-ended prompts. Outside of Phase 1, `AskUserQuestion` is permitted only for: (1) project name suggestions if left blank, (2) CC license warning confirmation, (3) multi-package input correction, and (4) overwrite confirmation if a README already exists.
+- Use `AskUserQuestion` with concrete options, not open-ended prompts. Outside of Phase 1, `AskUserQuestion` is permitted only for: (1) project name suggestions if left blank, (2) CC license warning confirmation, (3) multi-package input correction, (4) overwrite confirmation if a README already exists, and (5) the ecosystem clarification in Step 6.7 when release automation is requested in ops-only mode (no `{RUNTIME}` set).
 - Phase 1 must be completed in a single `AskUserQuestion` call. Do not split it across multiple calls.
 - If a tool is not installed (e.g., `bun`, `uv`), offer to install it or suggest an alternative
 - **All files MUST be created in the chosen project directory (CWD or the user's subdirectory choice from Phase 1) -- never in a parent, sibling, or unrelated directory**
@@ -1496,3 +1883,12 @@ If the project was created in the current directory, do NOT include a `cd` step 
 - Scaffolded projects for all languages must include at least one meaningful test so `{test command}` passes and any coverage tool reports non-zero coverage from the first commit; use the greet/greeting function pattern from Step 4 as the initial test scaffold
 - For multi-package projects (monorepos or projects with multiple toolchains), use the multi-package Lefthook template with `piped: true` + `priority` for pre-commit and `parallel: true` for pre-push; package names and directories must always be derived from the user's choices -- never hardcode names like "frontend" or "backend"
 - Always name the `just` recipe file `justfile` (all lowercase) — never `Justfile` or `JUSTFILE`
+- Release automation is always initiated by **merging a version-bump pull request** -- never by a manually-created tag or manual `cargo publish`/`npm publish`. Every release workflow template in Step 6.7 must preserve this trigger.
+- For Rust, always use **release-plz** for release automation -- it is not a Phase 1 choice like the non-Rust tools are. Use the exact pinned workflow from Step 6.7.1; do not improvise its two-job structure.
+- **GoReleaser cannot create a PR, a tag, or a release on its own** -- it only builds/publishes on an existing tag push. Whenever `{RELEASE_TOOL}` is GoReleaser, unconditionally pair it with release-please (Step 6.7.2) so the version-bump PR and tag still get created automatically on merge -- do not treat this pairing as optional or ask the user to confirm it, and never leave GoReleaser as the only release workflow.
+- **Changelog-owner precedence**: release-plz's embedded git-cliff (Rust) -> the release tool's own native changelog (release-please/changesets/commitizen, and GoReleaser via its mandatory release-please pairing) -> a standalone `git-cliff` fallback (only for unrecognized custom tools with no native changelog). Never stack two changelog generators on the same project.
+- Never add a separate `cliff.toml` or install git-cliff independently on the Rust release-plz path -- release-plz already embeds it.
+- `convco` enforcement (commit-msg hook, pre-push hook, CI check) is set up **only when `{AUTOMATED_CHANGELOG}` is yes** -- never offer or configure it independently of the changelog choice.
+- `convco check` **skips merge commits by default** (do not pass `--merges`) -- this is required, not incidental, since merge commits from GitHub's merge strategy or trunk-merges rarely follow Conventional Commits and would otherwise make the gate unusable.
+- Vendor the `cliff.toml` and `.versionrc` templates verbatim (via `curl` where shown, or the exact fallback content in this file) -- do not hand-write or paraphrase the Tera template body or the YAML config from memory.
+- License files and vendored config templates (`cliff.toml`, `.versionrc`) follow the same rule: fetch or copy exactly, edit only documented placeholders in place.

@@ -74,10 +74,10 @@ A few skills look similar at a glance and are worth telling apart up front:
 
 ### `init-repo`
 
-**What it is** — Scaffolds a new repo for agentic development, or retrofits ops tooling (git, precommits, gitignore, license, CI) onto an existing project.
+**What it is** — Scaffolds a new repo for agentic development, or retrofits ops tooling (git, precommits, gitignore, license, CI, release automation) onto an existing project.
 **Why it exists** — Every new project needs the same boring scaffolding done correctly; this skill enforces a consistent baseline across runtimes.
-**How to use it** — `/init project` or `/new project`, optionally seeded with a problem description. Phase 1 is a single bulk intake form (name, runtime, package manager, test runner, CI platform, license, project kind, etc.). Phase 2 executes 12 sequential setup steps and writes CLAUDE.md plus a README via the `readme` skill.
-**Unique among these skills** — Multi-runtime aware (Node/Bun, Python, Rust, Go) with ecosystem-appropriate conventions. The intake form is bulk to minimise back-and-forth. Pairs naturally with `mvp` (run `mvp` first to decide _what_ the project is).
+**How to use it** — `/init project` or `/new project`, optionally seeded with a problem description. Phase 1 is a single bulk intake form (name, runtime, package manager, test runner, CI platform, release automation, license, project kind, etc.). Phase 2 executes 12+ sequential setup steps and writes CLAUDE.md plus a README via the `readme` skill.
+**Unique among these skills** — Multi-runtime aware (Node/Bun, Python, Rust, Go) with ecosystem-appropriate conventions. The intake form is bulk to minimise back-and-forth. Optionally wires up release CI triggered by merging a version-bump PR (release-plz for Rust; release-please or a language-native tool otherwise), an automated CHANGELOG, and Conventional Commit enforcement via convco. Pairs naturally with `mvp` (run `mvp` first to decide _what_ the project is).
 **Notable internals** — A single large `SKILL.md` (~68KB) with runtime-specific dependency lists and CI templates inlined.
 
 ### `report`
